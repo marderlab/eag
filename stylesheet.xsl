@@ -34,7 +34,7 @@ $Revision: 1.1.6.7 $  $Date: 2008/02/29 12:45:30 $
 
 \title{Models of presynaptic Calcium microdomains}
 \author{Srinivas Gorur-Shandilya}
-\date{}
+\date{\today}
 \maketitle
 
     <!-- Determine if the there should be an introduction section. -->
