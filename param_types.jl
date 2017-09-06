@@ -42,6 +42,6 @@ end
     dt::Float64 = 50e-3 # ms
     t_end::Int64 = 5000 # ms
 
-    V_drive::Array{Float64,1} = [0,0] # this, in general, will have to be externally defined. make sure it is the right length (depends on dt, t_end)
+    V_drive::Array{Float64,1} = [0.0,0.0] # this, in general, will have to be externally defined. make sure it is the right length (depends on dt, t_end)
 end
 
