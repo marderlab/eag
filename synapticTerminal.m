@@ -133,18 +133,22 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
             % m_inf
             mNainf = @(V) (boltz(V,25.5,-5.29));
             mKinf = @(V) boltz(V,12.3,-11.8);
+            mCaTinf = @(V) boltz(V,27.1,-7.2);
 
 
             % h_inf 
             hNainf = @(V) (boltz(V,48.9,5.18));
+            hCaTinf = @(V) boltz(V,32.1,5.5);
 
 
             % tau_m
             taumNa = @(V) tauX(V,1.32,1.26,120.0,-25.0);
             taumK = @(V) tauX(V,7.2,6.4,28.3,-19.2);
+            taumCaT = @(V) tauX(V,21.7,21.3,68.1,-20.5);
 
             % tau_h
             tauhNa = @(V) (0.67/(1+exp((V+62.9)/-10.0)))*(1.5 + 1/(1+exp((V+34.9)/3.6)));
+            tauhCaT = @(V) tauX(V,105.,89.8,55.,-16.9);
 
             nsteps = floor(self.t_end/self.dt);
             N = zeros(nsteps,15);
@@ -153,12 +157,21 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
 
             N(1,:) = .1;
             N(1,1:2) = -50;
+            N(:,3) = 0.05;
+
+            R_by_zF = 500.0*(8.6174e-005);
+            T = 10 + 273.15;
+            RT_by_zF = R_by_zF*T;
+            f = 14.96;
+            fA = f*A2;
+            exp_dt_by_tau_Ca = exp(-dt/tau_Ca);
 
             for i = 2:nsteps
 
                 V_ext = self.V_drive(i-1);
                 V_prev1 = N(i-1,1);
                 V_prev2 = N(i-1,2);
+                Ca_prev = N(i-1,3);
 
                 % compartment 1  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -187,28 +200,43 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
 
                 % compartment 2  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+                % compute Calcium reversal potential
+                E_Ca = RT_by_zF*log(Ca_o/Ca_prev); 
+
                 minf_Na = mNainf(V_prev2);
                 hinf_Na = hNainf(V_prev2);
                 minf_K  = mKinf(V_prev2);
+                minf_CaT = mCaTinf(V_prev2);
+                hinf_CaT = hCaTinf(V_prev2);
 
-                % integrate m, h for Na, K channel
+                % integrate m, h for Na, K, Ca channel
                 N(i,7) = minf_Na + (N(i-1,7) - minf_Na)*exp(-dt/taumNa(V_prev2));
                 N(i,8) = minf_K + (N(i-1,8) - minf_K)*exp(-dt/taumK(V_prev2));
                 N(i,10) = hinf_Na + (N(i-1,10) - hinf_Na)*exp(-dt/tauhNa(V_prev2));
+                N(i,12) = minf_CaT + (N(i-1,12) - minf_CaT)*exp(-dt/taumCaT(V_prev2));
+                N(i,15) = hinf_CaT + (N(i-1,15) - hinf_CaT)*exp(-dt/tauhCaT(V_prev2));
 
                 % compute effective conductances 
-                gNa2 = N(i,7)*N(i,7)*N(i,7)*N(i,10)*g_Na2; 
-                gK2 = N(i,8)*N(i,8)*N(i,8)*N(i,8)*g_K2;  
+                gNa2 = g_Na2*(N(i,7)^3)*N(i,10); 
+                gK2 = g_K2*(N(i,8)^4);
+                gCa = g_Ca*N(i,12)^3*N(i,15);
 
-                sigma_g2 = gNa2 + gK2 + g_leak; 
+                sigma_g2 = gNa2 + gK2 + g_leak + gCa; 
 
                 % compute currents
                 I2 = (g_2*(V_ext - V_prev2) + g_1_2*(V_prev1 - V_prev2))*1e-6; % in nA
 
-                V_inf2 = (gNa2*self.E_Na + gK2*self.E_K + g_leak*self.E_leak+  I2/A2)/sigma_g2;
-                tau_v2 = C_m/(sigma_g2*10); % unit correction
+                ca_current = gCa*(V_prev2 - E_Ca);
 
+
+                % update voltage 
+                V_inf2 = (gNa2*self.E_Na + gK2*self.E_K + gCa*E_Ca + g_leak*self.E_leak+  I2/A2)/sigma_g2;
+                tau_v2 = C_m/(sigma_g2*10); % unit correction
                 N(i,2) = V_inf2 + (V_prev2 - V_inf2)*exp(-dt/tau_v2);
+
+                % update Calcium 
+                cinf = Ca_i - fA*ca_current; 
+                N(i,3) = cinf + (Ca_prev - cinf)*exp_dt_by_tau_Ca; 
 
             end
 
@@ -337,8 +365,10 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
                         N = self.integrate;
                         V1 = N(:,1);
                         V2 = N(:,2);
+                        Ca = N(:,3);
                         self.handles.plot_handles(2).YData = V1;
                         self.handles.plot_handles(3).YData = V2;
+                        self.handles.plot_handles(4).YData = Ca;
                         drawnow limitrate
          
                     end
