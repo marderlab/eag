@@ -7,18 +7,26 @@ pHeader;
 
 
 %% Estimating voltage dependence of gating variable 
-% First, I estimate the voltage dependence on the gating variable by looking at currents in voltage clamp in HEK cells. 
+% To model EAG channels, I need to understand how these channels vary their activity as a function of both voltage and Calcium concnetrations. These channels don't inactivate, so their behavior can be described by a single variable (m). In Hodgkin-Huxley terms, we want to determine how the steady state value of m depends on the voltage and Calcium, and how the timescale of m changes with voltage and Calcium. 
+
+%%
+% First, I estimate the voltage dependence on the gating variable by looking at currents in voltage clamp in HEK cells.In this data, EAG channels were inserted into HEK cells, and currents recorded from them in voltage clamp. The experiment was repeated with HEK cells without EAG, so subtracting one from the other should give us "pure" EAG currents. 
 
 
 path_name = '/Users/srinivas/data/calcium-microdomain/HEK';
 
 
 %%
-% In the following figure, I plot all the current traces in current clamp mode for the lowest Calcium case (13 nM). For now, I neglect the Calcium dependence and focus on the voltage dependence.  
+% In the following figure, I plot all the current traces in current clamp mode for the lowest Calcium case (13 nM). For now, I neglect the Calcium dependence and focus on the voltage dependence. (a) shows the current traces for a single cell that expressed EAG channels at 13nM Calcium. (b) is the same, but from a cell that doesn't express EAG channels. Note that the amplitudes and the kinetics of the currents are different. Different colors in (a-b) are different holding potentials. (c) and (d) show the I-V relationships for all the data at 13 nM Calcium. Each line corresponds to a different cell. 
 
 figure('outerposition',[0 0 900 901],'PaperUnits','points','PaperSize',[900 901]); hold on
 for i = 1:4
 	ax(i) = subplot(2,2,i); hold on
+	if i == 2
+		c = colorbar();
+		title(c,'V (mV)')
+		caxis([-80 80])
+	end
 end
 
 
@@ -110,7 +118,7 @@ end
 
 
 %%
-% Now, I subtract the no EAG curves from the EAG curves to estimate the I-V relationship of the EAG conductance alone. 
+% There seems to be considerable variation in the data, but since the data in (c) is independent of the data in (d), I average the responses in both and subtract one from the other to estimate the I-V relationship of the EAG conductance alone. (a) shows the mean I-V curves for the cells with EAG and cells without. I wonder if the massive outlier cell (see previous figure) contributes to much of the difference. (b) shows the result of subtraction -- it looks like the mean EAG current increases with voltage monotonically. In (c), I normalize the curve in (b) and fit a Boltzmann distribution to it. The data and fit are shown together, with the parameters of the fit. 
 
 
 figure('outerposition',[0 0 1501 500],'PaperUnits','points','PaperSize',[1501 500]); hold on
@@ -151,6 +159,8 @@ prettyFig();
 
 h = text(-40,.7,t,'interpreter','latex','FontSize',24);
 
+labelFigure('x_offset',-.01,'y_offset',-.01,'font_size',24)
+
 if being_published
 	snapnow
 	delete(gcf)
@@ -158,7 +168,7 @@ end
 
 
 %% Timescale dependence on voltage
-% In this section, I look at how the timescale of activation of the EAG current depends on the voltage. To estimate this, I fit exponentials to the rising phases of the EAG currents, and plot these timescales as a function of voltage. 
+% In this section, I look at how the timescale of activation of the EAG current depends on the voltage. To estimate this, I fit exponentials to the rising phases of the EAG currents, and plot these timescales as a function of voltage. (a) shows the time traces of the mean EAG current as a function of voltage (colors). For each trace, I fit an exponential, and retain fits only when the r^2 of the fit is > 0.9. (b) shows the estimated timescales vs. voltage, together with a function I fit to this. I can't estimate the timescales at very low voltages, so we have to extrapolate there. 
 
 
 V = linspace(-80,80,33);
@@ -234,6 +244,10 @@ for i = 1:length(V)
 	end
 end
 
+c = colorbar();
+title(c,'V (mV)')
+caxis([-80 80])
+
 % and fit a function to this 
 subplot(1,2,2); hold on
 f = fittype('A - B./(1+exp((x+D)./E))');
@@ -255,6 +269,8 @@ prettyFig()
 t =  '$-0.67+\frac{26500}{1+\exp\left(\frac{V+283}{46.03}\right)}$';
 h = text(20,250,t,'interpreter','latex','FontSize',24);
 
+labelFigure('x_offset',-.01,'y_offset',-.01,'font_size',24)
+
 if being_published	
 	snapnow	
 	delete(gcf)
@@ -262,7 +278,7 @@ end
 
 
 %% Calcium dependence of gating variable
-% In this section, I look at how the steady state currents (a proxy for the gating variable) vary with Calcium concentration in HEK cells. First, I plot the steady state currents vs. Calcium concnetration for each cell, both for the HEK cells that express EAG (top row), and for the HEK cells that don't (bottom row). 
+% In this section, I look at how the steady state currents (a proxy for the gating variable) vary with Calcium concentration in HEK cells. First, I plot the steady state currents vs. Calcium concnetration for each cell, both for the HEK cells that express EAG (top row), and for the HEK cells that don't (bottom row). In each plot, I plot the raw current vs. the Calcium concentration. The different lines correspond to different holding potentials (colors). 
 
 figure('outerposition',[0 0 1444 901],'PaperUnits','points','PaperSize',[1444 901]); hold on
 for i = 1:4
@@ -356,7 +372,7 @@ Imax_Control = squeeze(nanmean(Imax_Control(:,1:3,:),2));
 
 
 %%
-% Now I average over all cells, and compare the curves between cells that have EAG and cells that don't. 
+% Now I average over all cells, and compare the curves between cells that have EAG and cells that don't. (a) shows the mean EAG currents as a function of the Calcium concentration -- they seem to decrease with increasing Calcium concentration. In (b), I plot the highest curve (the curve @ 80mV) and fit a simple function to this. I choose a Hill-like function, and it seems to a decent job at predicting how Calcium inhibits EAG currents. 
 
 Imax = Imax_WT - Imax_Control;
 
@@ -403,6 +419,8 @@ prettyFig();
 t =  '$\frac{6\mu M}{[Ca^{2+}]+6\mu M}$';
 h = text(1e-8,.5,t,'interpreter','latex','FontSize',24);
 
+
+labelFigure('x_offset',-.05,'y_offset',-.01,'font_size',24)
 
 if being_published
 	snapnow
