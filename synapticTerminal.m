@@ -13,9 +13,9 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
         % order is as follows:
         %     cm  A extCa Ca0  tauCa f   conductances(8)
         parameter_names = {'C_{m}','A1','A2','Ca_{o}','Ca_{i}','tau_{Ca}','f'  ,'g_{Na}1','g_{Na}2','g_{Ca}','g_{K}1','g_{K}2','g_1','g_2','g_1_2','g_{leak}','g_{EAG}1','g_{EAG}2'}
-        parameters      = [10      .06   .06   3000     0.05      200      15    183       183        2.3      30       30     700   700     300    .0993,    10, 10]
+        parameters      = [10      .06   .06   3000     0.05      20      15    183       183        2.3      30       30     3e3   3e3     300    .0993,    10, 10]
         lb              = [0       0     0     1        0.01      1        1     0         0          0        0        0       0     0       0      0, 0, 0];
-        ub              = [100     1     1     1e4      100       1000     100   300       300        300      300      300     999   999     300    300, 300, 300];
+        ub              = [100     1     1     1e4      100       999     100   300       300        300      300      300     1e4   1e4     300    300, 300, 300];
         parameter_units = {'nF/mm^2','mm^2','mm^2','uM','uM',    'ms','uM/nA','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2'}
 
 
@@ -105,19 +105,19 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
             self.V_drive = value;
         end
 
-        function [V, Ca, n] = integrate(self)
+        function [V1, V2, Ca, currents] = integrate(self)
             switch self.implementation
             case 'SGS/MATLAB'
-                [V, Ca, n] = self.integrate_SGS_MATLAB;
+                [V1, V2, Ca, currents] = self.integrate_SGS_MATLAB;
             case 'SGS/Julia'
-                [V, Ca, n] = self.integrate_SGS_JULIA;
+                [V2, Ca, n] = self.integrate_SGS_JULIA;
             otherwise
                 error('Unknown implementation')
             end
                    
         end
 
-        function [V1, V2, Ca2] = integrate_SGS_MATLAB(self)
+        function [V1, V2, Ca2, currents] = integrate_SGS_MATLAB(self)
             % pure MATLAB implementation of this model 
 
              % assemble parameters
@@ -127,8 +127,8 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
 
 
             % define functions
-            boltz = @(V,A,B) (1/(1 + exp((V+A)/B)));
-            tauX = @(V,A,B,D,E) (A - B/(1+exp((V+D)/E)));
+            boltz = @(V,A,B) (1./(1 + exp((V+A)./B)));
+            tauX = @(V,A,B,D,E) (A - B./(1+exp((V+D)./E)));
 
             % m_inf
             mNainf = @(V) (boltz(V,25.5,-5.29));
@@ -157,22 +157,37 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
 
             % pre-allocate arrays
             V1 = zeros(nsteps,1);
-            mNa1 = 0;
-            hNa1 = 0;
-            mK1 = 0;
-            mEAG1 = 0;
+            mNa1 = mNainf(self.E_leak);
+            hNa1 = hNainf(self.E_leak);
+            mK1 = mKinf(self.E_leak);
+            mEAG1 = mEAGinf(self.E_leak,0.05);
 
 
             V2 = zeros(nsteps,1);
             Ca2 = zeros(nsteps,1);
-            mNa2 = 0;
-            hNa2 = 0;
-            mK2 = 0;
-            mEAG2 = 0;
-            mCaT2 = 0;
-            hCaT2 = 0;
+            gNa1 = zeros(nsteps,1);
+            gK1 = zeros(nsteps,1);
+            gEAG1 = zeros(nsteps,1);
+            gNa2 = zeros(nsteps,1);
+            gK2 = zeros(nsteps,1);
+            gEAG2 = zeros(nsteps,1);
+            gCa2 = zeros(nsteps,1);
+            E_Ca = zeros(nsteps,1);
+
+            I1 = zeros(nsteps,1);
+            I2 = zeros(nsteps,1);
+
+
+            mNa2 = mNainf(self.E_leak);
+            hNa2 = hNainf(self.E_leak);
+            mK2 = mKinf(self.E_leak);
+            mEAG2 = mEAGinf(self.E_leak,0.05);
+            mCaT2 = mCaTinf(self.E_leak);
+            hCaT2 = hCaTinf(self.E_leak);
 
             % set some initial conditions 
+            V1(1) = self.E_leak;
+            V2(1) = self.E_leak;
             Ca2(1) = 0.05;
 
             dt = self.dt;
@@ -203,24 +218,30 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
                 mEAG1 = minf_EAG + (mEAG1 - minf_EAG)*exp(-dt/taumEAG(V1(i-1)));
                 
                 % compute effective conductances 
-                gNa1 = g_Na1*(mNa1^3)*hNa1; 
-                gK1 = g_K1*(mK1^4);
-                gEAG1 = g_EAG1*(mEAG1^4); %% How do we know this exponent?
+                gNa1(i) = g_Na1*(mNa1^3)*hNa1; 
+                gK1(i) = g_K1*(mK1^4);
+                gEAG1(i) = g_EAG1*(mEAG1); %% How do we know this exponent?
 
-                sigma_g1 = gNa1 + gK1 + gEAG1 + g_leak; 
+                sigma_g1 = gNa1(i) + gK1(i) + gEAG1(i) + g_leak; 
 
                 % compute currents from electric coupling 
-                I1 = (g_1*(V_ext - V1(i-1)) + g_1_2*(V2(i-1) - V1(i-1)))*1e-6; % in nA
+                if ~isnan(V2(i-1))
+                    I1(i) = (g_1*(V_ext - V1(i-1)) + g_1_2*(V2(i-1) - V1(i-1)))*1e-6; % in nA
+                else
+                    I1(i) = (g_1*(V_ext - V1(i-1)))*1e-6;
+                end
 
-                V_inf1 = (gNa1*self.E_Na + gK1*self.E_K + gEAG1*self.E_K + g_leak*self.E_leak + I1/A1)/sigma_g1;
+                V_inf1 = (gNa1(i)*self.E_Na + gK1(i)*self.E_K + gEAG1(i)*self.E_K + g_leak*self.E_leak + I1(i)/A1)/sigma_g1;
+
                 tau_v1 = C_m/(sigma_g1*10); % unit correction
 
                 V1(i) = V_inf1 + (V1(i-1) - V_inf1)*exp(-dt/tau_v1);
 
+
                 % compartment 2  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
                 % compute Calcium reversal potential
-                E_Ca = RT_by_zF*log(Ca_o/Ca2(i-1)); 
+                E_Ca(i) = RT_by_zF*log(Ca_o/Ca2(i-1)); 
 
                 minf_Na = mNainf(V2(i-1));
                 hinf_Na = hNainf(V2(i-1));
@@ -242,27 +263,41 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
                 hCaT2 = hinf_Na + (hCaT2 - hinf_Na)*exp(-dt/tauhCaT(V2(i-1)));
                 
                 % compute effective conductances 
-                gNa2 = g_Na2*(mNa2^3)*hNa2; 
-                gK2 = g_K2*(mK2^4);
-                gEAG2 = g_EAG2*(mEAG2^4); %% How do we know this exponent?
-                gCa2 = g_Ca*(mCaT2^3)*hCaT2; 
+                gNa2(i) = g_Na2*(mNa2^3)*hNa2; 
+                gK2(i) = g_K2*(mK2^4);
+                gEAG2(i) = g_EAG2*(mEAG2); %% How do we know this exponent?
+                gCa2(i) = g_Ca*(mCaT2^3)*hCaT2; 
 
-                sigma_g2 = gNa2 + gK2 + gEAG2 + gCa2 + g_leak; 
+                sigma_g2 = gNa2(i) + gK2(i) + gEAG2(i) + gCa2(i) + g_leak; 
 
                 % compute currents from electric coupling 
-                I2 = (g_2*(V_ext - V2(i-1)) + g_1_2*(V1(i-1) - V2(i-1)))*1e-6; % in nA
+                I2(i) = (g_2*(V_ext - V2(i-1)) + g_1_2*(V1(i-1) - V2(i-1)))*1e-6; % in nA
 
-                V_inf2 = (gNa2*self.E_Na + gK2*self.E_K + gCa2*E_Ca + gEAG2*self.E_K + g_leak*self.E_leak +  I2/A2)/sigma_g2;
+                V_inf2 = (gNa2(i)*self.E_Na + gK2(i)*self.E_K + gCa2(i)*E_Ca(i) + gEAG2(i)*self.E_K + g_leak*self.E_leak +  I2(i)/A2)/sigma_g2;
                 tau_v2 = C_m/(sigma_g2*10); % unit correction
 
                 V2(i) = V_inf2 + (V2(i-1) - V_inf2)*exp(-dt/tau_v2);
 
+
                 % update Calcium 
-                ca_current = gCa2*(V2(i-1) - E_Ca);
+                ca_current = gCa2(i)*(V2(i-1) - E_Ca(i));
                 cinf = Ca_i - fA*ca_current; 
                 Ca2(i) = cinf + (Ca2(i-1) - cinf)*exp_dt_by_tau_Ca; 
 
             end
+
+
+            currents.gNa1 = gNa1.*(V1 - self.E_Na).*A2;
+            currents.gK1 = gK1.*(V1 - self.E_K).*A2;
+            currents.gEAG1 = gEAG1.*(V1 - self.E_K).*A2;
+            currents.gNa2 = gNa2.*(V2 - self.E_Na).*A2;
+            currents.gK2 = gK2.*(V2 - self.E_K).*A2;
+            currents.gEAG2 = gEAG2.*(V2 - self.E_K).*A2;
+            currents.gCa2 = gCa2.*(V2 - E_Ca).*A2;
+
+            currents.I1 = I1;
+            currents.I2 = I2;
+
         end
 
 
@@ -322,7 +357,7 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
 
             if make_gui
                 Height = 1100;
-                self.handles.manipulate_control = figure('position',[1000 250 1400 Height], 'Toolbar','none','Menubar','none','NumberTitle','off','IntegerHandle','off','CloseRequestFcn',@self.quitManipulateCallback,'Name',['manipulate[neuron]']);
+                self.handles.manipulate_control = figure('position',[1000 250 1400 Height],'NumberTitle','off','IntegerHandle','off','CloseRequestFcn',@self.quitManipulateCallback,'Name',['manipulate[neuron]']);
 
                 % add 4 axes
                 dummy = NaN*(self.dt:self.dt:self.t_end);
@@ -379,14 +414,54 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
                     self.handles.controllabel(i).Position = [x_offset 55-(i-1)*16];
                 end
 
+                % make a second figure for the currents 
+                self.handles.manipulate_control2 = figure('position',[1000 250 1400 500],'NumberTitle','off','IntegerHandle','off','CloseRequestFcn',@self.quitManipulateCallback,'Name','Effective Conductances ');
+
+                t1 = subplot(2,1,1); hold on
+                self.handles.current_plot1(1) = plot(NaN,NaN,'LineWidth',3);
+                self.handles.current_plot1(2) = plot(NaN,NaN,'LineWidth',3);
+                self.handles.current_plot1(3) = plot(NaN,NaN,'LineWidth',3);
+                self.handles.current_plot1(4) = plot(NaN,NaN,'LineWidth',3);
+                L = {'NaV','K','EAG','Ca'};
+                legend(self.handles.current_plot1,L,'Location','northwest')
+
+                t2 = subplot(2,1,2); hold on
+                self.handles.current_plot2(1) = plot(NaN,NaN,'LineWidth',3);
+                self.handles.current_plot2(2) = plot(NaN,NaN,'LineWidth',3);
+                self.handles.current_plot2(3) = plot(NaN,NaN,'LineWidth',3);
+                self.handles.current_plot2(4) = plot(NaN,NaN,'LineWidth',3);
+
+                linkaxes([t1 t2],'x')
+                time = self.dt:self.dt:self.t_end;
+                try
+                    set(t1,'XLim',time([find(self.V_drive > 0,1,'first') - 50 find(self.V_drive > 0,1,'last') + 200]))
+                catch
+                end
+
+                for i = 1:4
+                    self.handles.current_plot1(i).XData = self.dt:self.dt:self.t_end;
+                    self.handles.current_plot2(i).XData = self.dt:self.dt:self.t_end;
+                end
+   
 
                 % non stop integration
                 while isfield(self.handles,'ax')
                     if isvalid(self.handles.ax)
-                        [V1, V2, Ca] = self.integrate;
+                        [V1, V2, Ca, currents] = self.integrate;
                         self.handles.plot_handles(2).YData = V1;
                         self.handles.plot_handles(3).YData = V2;
                         self.handles.plot_handles(4).YData = Ca;
+
+                        % also show the currents 
+                        self.handles.current_plot1(1).YData = currents.gNa1;
+                        self.handles.current_plot1(2).YData = currents.gK1;
+                        self.handles.current_plot1(3).YData = currents.gEAG1;
+
+                        self.handles.current_plot2(1).YData = currents.gNa2;
+                        self.handles.current_plot2(2).YData = currents.gK2;
+                        self.handles.current_plot2(3).YData = currents.gEAG2;
+                        self.handles.current_plot2(4).YData = currents.gCa2;
+
                         drawnow limitrate
          
                     end
