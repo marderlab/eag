@@ -257,6 +257,25 @@ for i = 1:size(NoEAGFile,1)
 	end
 end
 
+load(joinPath(path_name,'MutData.mat'))
+
+for i = 1:size(MutFile,1)
+	for j = 1:size(MutFile,2)
+		if ~isempty(MutFile{i,j})
+			thisI = MutFile{i,j}{1};
+			for k = 1:33
+				% assemble
+				all_I(:,c) = thisI(:,k);
+				Ca_levels(c) = Ca_space(j);
+				cell_id(c) = i;
+				all_V(c) = V_space(k);
+				genotype(c) = 3; 
+				c = c + 1;
+			end
+		end
+	end
+end
+
 % remove baseline from every current trace
 for i = 1:size(all_I,2)
 	all_I(:,i) = all_I(:,i) - mean(all_I(1:50,i));
@@ -274,7 +293,7 @@ end
 g_inf = mean(g(4e3:5e3,:));
 
 %%
-% In the following figure, I plot all the current traces in current clamp mode for the lowest Calcium case (13 nM). For now, I neglect the Calcium dependence and focus on the voltage dependence. (a) shows the current traces for a single cell that expressed EAG channels at 13nM Calcium. (b) is the same, but from a cell that doesn't express EAG channels. Note that the amplitudes and the kinetics of the currents are different. Different colors in (a-b) are different holding potentials. (c) and (d) show the I-V relationships for all the data at 13 nM Calcium. Each line corresponds to a different cell. 
+% In the following figure, I plot all the current traces in current clamp mode for the lowest Calcium case (13 nM). For now, I neglect the Calcium dependence and focus on the voltage dependence. The top row shows data from HEK cells without the EAG channel, and the bottom row shows data from HEK cells with the EAG channel. (a) shows the current traces for a single HEK cell without EAG channels at 13nM Calcium. (b) is the same data, but the currents are converted into conductances. (c) Shows the conductances for all the cells in the dataset. (d-f) is in the same format, but for cells that do express EAG. 
 
 figure('outerposition',[0 0 1501 901],'PaperUnits','points','PaperSize',[1501 901]); hold on
 
@@ -292,6 +311,7 @@ end
 xlabel('Time (ms)')
 ylabel('Current')
 set(gca,'YLim',[0 2000])
+title('w/o EAG, 1 cell')
 
 subplot(2,3,2); hold on
 for i = 1:length(these_traces)
@@ -301,6 +321,7 @@ end
 xlabel('Time (ms)')
 ylabel('Conductance')
 set(gca,'YLim',[0 100])
+title('w/o EAG, 1 cell')
 
 % now show the conductance-voltage curves for all cells 
 clear ax1 ax2
@@ -313,7 +334,7 @@ for i = 1:max(cell_id)
 end
 xlabel(ax1,'Membrane potential (mV)')
 ylabel(ax1,'Conductance')
-title(ax1,'All cells')
+title(ax1,'w/o EAG, all cells')
 set(gca,'YLim',[0 100])
 
 % now show the cells with EAG
@@ -330,6 +351,7 @@ end
 xlabel('Time (ms)')
 ylabel('Current')
 set(gca,'YLim',[0 2000])
+title('with EAG, 1 cell')
 
 subplot(2,3,5); hold on
 for i = 1:length(these_traces)
@@ -339,6 +361,7 @@ end
 xlabel('Time (ms)')
 ylabel('Conductance')
 set(gca,'YLim',[0 100])
+title('with EAG, 1 cell')
 
 % now show the conductance-voltage curves for all cells 
 clear ax1 ax2
@@ -346,24 +369,40 @@ ax1 = subplot(2,3,6); hold on
 for i = 1:max(cell_id)
 	y = g_inf(cell_id == i & Ca_levels == 13e-9 & genotype == 2);
 	if ~isempty(y)
-		plot(ax1,V_space,y)
+		plot(ax1,V_space,y,'DisplayName',oval(i))
 	end
 end
 xlabel(ax1,'Membrane potential (mV)')
 ylabel(ax1,'Conductance')
-title(ax1,'All cells')
+title(ax1,'with EAG, cells')
 set(gca,'YLim',[0 100])
 
 prettyFig();
 
+ labelFigure('x_offset',-.01,'y_offset',-.0,'font_size',28)
 
 if being_published
 	snapnow
 	delete(gcf)
 end
 
+
+
 %%
-% Now I average the conductances of the cells expressing EAG and those that don't, and subtract the latter from the former to get a conductance curve for just EAG. 
+% Notice that there is one massive outlier in the WT EAG cells -- for whatever reason, this cell has much bigger conductances for every membrane potential. I'm going to remove this from the dataset. 
+
+rm_this = find(cell_id < 3 & genotype == 2); % both 1 and 2 are bad
+genotype(rm_this) = [];
+all_I(:,rm_this) = [];
+Ca_levels(rm_this) = [];
+cell_id(rm_this) = [];
+all_V(rm_this) = [];
+g(:,rm_this) = [];
+g_inf(rm_this) = [];
+	 
+
+%%
+% Now I average the conductances of the cells expressing EAG and those that don't, and subtract the latter from the former to get a conductance curve for just EAG. This lets me estimate the gating function of the EAG channel, exactly like I did in the simulated data. In the following figure, (a-e) show estimated asymptotic gating variables as a function of membrane potential. (a-e) differ in the assumed exponent $p$. In (a-e), data is shown as black crosses, and the red lines are Boltzmann fits to the data. In (f), I plot the goodness-of-fit vs. the exponent $p$, and see that there is a clear minimum at $p = 2$, suggesting that this is the exponent. 
 
 temp = g_inf(Ca_levels == 13e-9 & genotype == 2);
 g_with_EAG = mean(reshape(temp,33,length(temp)/33),2);
@@ -396,8 +435,8 @@ for i = 1:length(p)
 
 end
 
-% use p = 4 because I think that's correct, and it's close to the minimum
-this_g = g_EAG.^(1/4);
+% use p = 2 because I think that's correct, and it's close to the minimum
+this_g = g_EAG.^(1/2);
 this_g = this_g/this_g(end);
 
 mInfEAG = fit(vectorise(V_space(2:end)),vectorise(this_g(2:end)),boltz,'StartPoint',[12.3, -11.8]);
@@ -418,402 +457,367 @@ if being_published
 end
 
 
-return
+%% Mutated EAG Channels: gating functions
+% Now I do the same thing for the mutated EAG channels, and characterise their gating functions. Once again, I get $p = 2$, and the gating function looks very similar. 
+
+
+temp = g_inf(Ca_levels == 13e-9 & genotype == 3);
+g_with_mut_EAG = mean(reshape(temp,33,length(temp)/33),2);
+temp = g_inf(Ca_levels == 13e-9 & genotype == 1);
+g_wo_EAG = mean(reshape(temp,33,length(temp)/33),2);
+g_mut_EAG = g_with_mut_EAG - g_wo_EAG;
+g_mut_EAG(g_mut_EAG<0) = 0;
+boltz = @(A,B,x) (1./(1 + exp((x+A)./B)));
+
+figure('outerposition',[0 0 1301 997],'PaperUnits','points','PaperSize',[1301 997]); hold on
+
+% now plot the conductances, with various roots 
+p = [1:8];
+r2 = NaN*p;
+for i = 1:length(p)
+	this_g = g_mut_EAG.^(1/p(i));
+	this_g = this_g/this_g(end);
+
+	ff = fit(vectorise(V_space(2:end)),vectorise(this_g(2:end)),boltz,'StartPoint',[12.3, -11.8]);
+
+	if i < 6
+		subplot(2,3,p(i)); hold on
+		plot(V_space,this_g,'k+')
+		ylabel(['g^{1/' oval(p(i)) '} (norm)'])
+		xlabel('Voltage (mV)')
+		plot(V_space,ff(V_space),'r')
+	end
+
+	r2(i) = rsquare(ff(V_space(2:end)),this_g(2:end));
+
+end
+
+
+this_g = g_mut_EAG.^(1/2);
+this_g = this_g/this_g(end);
+
+mInfMutEAG = fit(vectorise(V_space(2:end)),vectorise(this_g(2:end)),boltz,'StartPoint',[12.3, -11.8]);
+
+subplot(2,3,6); hold on
+plot(p,1-r2)
+xlabel('p')
+ylabel('1 - r^2')
+
+suptitle('Mutated EAG channels -- gating functions')
+prettyFig();
+
+labelFigure('x_offset',-.01,'y_offset',-.01,'font_size',28)
+
+if being_published
+	snapnow
+	delete(gcf)
+end
+
+%%
+% Now I compare the gating functions for the WT and the mutated EAG channels. They look almost identical. This makes sense, because the mutation in the EAG channel should affect Calcium binding, not activation. 
+
+figure('outerposition',[200 200 601 601],'PaperUnits','points','PaperSize',[1200 601]); hold on
+
+plot(V_space,mInfMutEAG(V_space),'r')
+plot(V_space,mInfEAG(V_space),'b')
+legend({'Mutated EAG','WT EAG'},'Location','southeast')
+xlabel('Membrane potential (mV)')
+ylabel('m_{Inf}')
+
+prettyFig();
+
+if being_published
+	snapnow
+	delete(gcf)
+end
 
 
 %% Timescale dependence on voltage
-% In this section, I look at how the timescale of activation of the EAG current depends on the voltage. To estimate this, I fit exponentials to the rising phases of the EAG currents, and plot these timescales as a function of voltage. (a) shows the time traces of the mean EAG current as a function of voltage (colors). For each trace, I fit an exponential, and retain fits only when the r^2 of the fit is > 0.9. (b) shows the estimated timescales vs. voltage, together with a function I fit to this. I can't estimate the timescales at very low voltages, so we have to extrapolate there. 
+% In this section, I look at how the timescale of activation of the EAG current depends on the voltage. First, I construct time series of EAG conductances by subtracted cell-averaged currents in HEK cells without EAG from cell-averaged currents in HEK cells with EAG, and then converting those corrects into conductances. These conductances are shown below: (a) shows these conductances for WT EAG channels, and (b) shows the same conductances for mutant EAG channels. Colors indicate holding voltage (blue = more hyperpolarized). Note that these raw curves look quite similar. 
 
 
-V = linspace(-80,80,33);
-t = linspace(0,500,5000);
-I_WT = NaN(length(V),12,5000);
-I_control = NaN(length(V),12,5000);
+% make conductance time series for the WT and mut EAG
+temp = g(:,Ca_levels == 13e-9 & genotype == 1);
+temp = reshape(temp,size(temp,1),33,size(temp,2)/33);
+g_without_EAG =  squeeze(mean(temp,3));
 
-% first do WT. 
-load(joinPath(path_name,'WTData.mat'))
+temp = g(:,Ca_levels == 13e-9 & genotype == 2);
+temp = reshape(temp,size(temp,1),33,size(temp,2)/33);
+g_with_WT_EAG =  squeeze(mean(temp,3));
 
-for i = 1:12
-	for j = 1
-		if ~isempty(WTFile{i,j})
-			temp = WTFile{i,j}{1}; % lowest calcium conc.
-			for k = 1:33
-				I_WT(k,i,:) = temp(52:end,k);
-			end
-		end
-	end
+temp = g(:,Ca_levels == 13e-9 & genotype == 3);
+temp = reshape(temp,size(temp,1),33,size(temp,2)/33);
+g_with_mut_EAG =  squeeze(mean(temp,3));
+
+g_EAG = g_with_WT_EAG - g_without_EAG;
+g_mut_EAG = g_with_mut_EAG - g_without_EAG;
+
+% normalize these conductances 
+for i = 1:length(V_space)
+	g_EAG(:,i) = g_EAG(:,i)/mean(g_EAG(4900:5000,i));
+	g_mut_EAG(:,i) = g_mut_EAG(:,i)/mean(g_mut_EAG(4900:5000,i));
 end
 
-% average over all neurons 
-I_WT = squeeze(mean(I_WT,2))';
-
-clear temp
-% do the controls
-load(joinPath(path_name,'NoEAGData.mat'))
-
-for i = 1:5
-	for j = 1
-		if ~isempty(NoEAGFile{i,j})
-			temp = NoEAGFile{i,j}{1}; % lowest calcium conc.
-			for k = 1:33
-				I_control(k,i,:) = temp(52:end,k);
-			end
-		end
-	end
-end
-
-% average over all neurons 
-I_control = squeeze(nanmean(I_control,2))';
-
-% subtract
-I = I_WT - I_control;
-
+% show these
 figure('outerposition',[0 0 1000 500],'PaperUnits','points','PaperSize',[1000 500]); hold on
 subplot(1,2,1); hold on
-c = parula(34);
-for i = 1:33
-	plot(t,I(:,i),'Color',c(i,:))
+for i = 10:5:length(V_space)
+	y = g_EAG(:,i);
+	y(1:100) = NaN;
+	plot(time,y,'Color',c(i,:))
 end
-set(gca,'XLim',[0 100])
-ylabel('Mean EAG current')
+set(gca,'YLim',[0 1.1])
 xlabel('Time (ms)')
-set(gca,'YLim',[0 4000])
+ylabel('Conductance (norm)')
+title('WT EAG')
 
-% fit a timescale to each time trace
-tau = NaN*V;
-r2 = NaN*V;
+subplot(1,2,2); hold on
+for i = 10:5:length(V_space)
+	y = g_mut_EAG(:,i);
+	y(1:100) = NaN;
+	plot(time,y,'Color',c(i,:))
+end
+set(gca,'YLim',[0 1.1])
+xlabel('Time (ms)')
+ylabel('Conductance (norm)')
+title('Mutant EAG')
+prettyFig();
+
+labelFigure('x_offset',-.01,'y_offset',-.04,'font_size',28)
+
+if being_published
+	snapnow
+	delete(gcf)
+end
+
+%%
+% Now, I fit exponentials to these time series, after taking their inverse power for a integers up to 8. I then compute the mean goodness of fit for all these fits, and plot that as a function of the exponent $p$. Note that the best fit is for $p=2$, which is what I use throughout to model these channels. 
+
+% fit a timescale to every time trace, for every integer power
+p = 1:8;
+tau_mut = NaN(length(V_space),length(p));
+tau_wt = NaN(length(V_space),length(p));
+tau_r2_mut = NaN(length(V_space),length(p));
+tau_r2_wt = NaN(length(V_space),length(p));
 f = fittype('1 - exp(-x./tau)');
 
 
-for i = 1:length(V)
-	y = I(:,i);
-	y = y/mean(y(2e3:2.5e3));
-	[~,idx] = min(abs(y));
-	y = y(idx:2e3);
-	x = t(idx:2e3);
-	try
-		[ff,gof] = fit(x(:),y(:),f,'StartPoint',1);
-		tau(i) = ff.tau;
-		r2(i) = gof.rsquare;
-	catch
+for i = 1:length(V_space)
+	for j = 1:length(p)
+		% first do WT
+		y = g_EAG(101:end-1,i);
+		y = y.^(1/p(j));
+		x = time(101:end-1);
+		if isreal(y)
+			[ff,gof] = fit(x(:),y(:),f,'StartPoint',10,'Lower',0);
+			tau_wt(i,j) = ff.tau;
+			tau_r2_wt(i,j) = gof.rsquare;
+		else
+			tau_r2_wt(i,j) = -1;
+		end
+
+		% do mutant
+		y = g_mut_EAG(101:end-1,i);
+		y = y.^(1/p(j));
+		x = time(101:end-1);
+		if isreal(y)
+			[ff,gof] = fit(x(:),y(:),f,'StartPoint',10,'Lower',0);
+			tau_mut(i,j) = ff.tau;
+			tau_r2_mut(i,j) = gof.rsquare;
+		else
+			tau_r2_wt(i,j) = -1;
+		end
 	end
 end
 
-c = colorbar();
-title(c,'V (mV)')
-caxis([-80 80])
 
-% and fit a function to this 
-subplot(1,2,2); hold on
-f = fittype('A - B./(1+exp((x+D)./E))');
+figure('outerposition',[200 200 601 601],'PaperUnits','points','PaperSize',[1200 601]); hold on
+for i = 1:length(p)
+	l1 = plot(i,mean(tau_r2_wt(tau_r2_wt(:,i) > 0,i)),'k+');
+end
+set(gca,'XLim',[0 8.5],'YLim',[0 1])
+xlabel('p')
+ylabel('<r^2> of exponential fit')
 
-r2_cutoff = .9;
+for i = 1:length(p)
+	l2 = plot(i,mean(tau_r2_mut(tau_r2_mut(:,i) > 0,i)),'r+');
+end
+legend([l1,l2],{'WT EAG','Mutant EAG'})
 
-ff = fit(V(r2>r2_cutoff)',tau(r2>r2_cutoff)',f,'StartPoint',[1 1 1 1]);
-plot(V,ff(V),'r')
-plot(V(r2>r2_cutoff),tau(r2>r2_cutoff),'k+')
-legend({'Fit','Data'})
+prettyFig();
 
-xlabel('Voltage (mV)')
-ylabel('Timescale (ms)')
-set(gca,'YLim',[0 400])
+if being_published
+	snapnow
+	delete(gcf)
+end
 
+%%
+% Now I plot the timescales from this fit as a function of membrane potential, keeping only timescales where the goodness of exponential fit was > 0.8. I do this for various values of $p$, for both the mutant (red) and the WT (black) EAG channels. In each plot below, the black circles are the timescales of exponential fits to time series of estimated gating variable for the WT EAG channels, and the red crosses are timescales of exponential fits to to time series of estimated gating variable for the mutant EAG channels. The dashed lines are functional fits to the crosses or the circles, using standard functions as in Liu et al. or Prinz et al. Note that these channels appear to be much slower than the Potassium channels I simulated at the very beginning.
 
-prettyFig()
+r2_cutoff = .8;
+tau_r2_mut(isnan(tau_r2_mut)) = -1;
+figure('outerposition',[0 0 1001 901],'PaperUnits','points','PaperSize',[1001 901]); hold on
+for i = 1:4
+	subplot(2,2,i); hold on
+	y = tau_wt(:,i);
+	x = V_space;
+	x(tau_r2_wt(:,i) < r2_cutoff) = [];
+	y(tau_r2_wt(:,i) < r2_cutoff) = [];
+	plot(x,y,'ko')
 
-t =  '$-0.67+\frac{26500}{1+\exp\left(\frac{V+283}{46.03}\right)}$';
-h = text(20,250,t,'interpreter','latex','FontSize',24);
+	% fit functions to this
+	ff = fit(x(:),y(:),tauX,'StartPoint',[7 6 30 -20]);
+	plot(V_space,ff(V_space),'k--')
 
-labelFigure('x_offset',-.01,'y_offset',-.01,'font_size',24)
+	y = tau_mut(:,i);
+	x = V_space;
+	x(tau_r2_mut(:,i) < r2_cutoff) = [];
+	y(tau_r2_mut(:,i) < r2_cutoff) = [];
+	plot(x,y,'r+')
 
-if being_published	
-	snapnow	
+	% fit functions to this
+	ff = fit(x(:),y(:),tauX,'StartPoint',[7 6 30 -20]);
+	plot(V_space,ff(V_space),'r--')
+
+	title(['p = ' oval(i)])
+
+	set(gca,'YLim',[0 200])
+	xlabel('Membrane potential (mV)')
+	ylabel('\tau_m (ms)')
+
+	if i == 1
+		clear l
+		l(1) = plot(NaN,NaN,'k');
+		l(2) = plot(NaN,NaN,'r');
+		legend(l,{'WT EAG','Mut EAG'},'location','northeast')
+	end
+end
+
+prettyFig();
+
+labelFigure('x_offset',-.01,'y_offset',-.0,'font_size',28)
+
+if being_published
+	snapnow
 	delete(gcf)
 end
 
 
 %% Calcium dependence of gating variable
-% In this section, I look at how the steady state currents (a proxy for the gating variable) vary with Calcium concentration in HEK cells. First, I plot the steady state currents vs. Calcium concnetration for each cell, both for the HEK cells that express EAG (top row), and for the HEK cells that don't (bottom row). In each plot, I plot the raw current vs. the Calcium concentration. The different lines correspond to different holding potentials (colors). 
+% In this section, I characterize how these channels depend on intracellular Calcium concentration. In the following figure, I plot conductance of WT and mutant channels as a function of membrane potential, for various intracellular Calcium concentrations. Note that at $500\mu M$, the mutant channels have a greatly decreased conductance compared to the WT channels, but they're not that different at other Calcium concentrations. 
 
-figure('outerposition',[0 0 1444 901],'PaperUnits','points','PaperSize',[1444 901]); hold on
-for i = 1:4
-	ax(i) = subplot(2,4,i); hold on
-	set(ax(i),'XScale','log','YScale','log')
-end
+% the trick here is to only use data from cells that have every Calcium level.
+% it is an unfair comparison if some cells have some calcium levels, 
+% but not all 
 
-V = linspace(-80,80,33);
-Imax_WT = NaN(length(V),12,5);
-Imax_Control = NaN(length(V),5,5);
-Ca = [13e-9 100e-9 10e-6 100e-6 500e-6]; % M
+all_ca_levels = unique(Ca_levels(find(genotype == 1))); % because control doesn't have all cal levels
 
-% first do WT. 
-load(joinPath(path_name,'WTData.mat'))
+good_ctrl_cells = [];
+good_wt_cells = [];
+good_mut_cells = [];
 
-for i = 1:12
-	for j = 1:5
-		if ~isempty(WTFile{i,j})
-			I = WTFile{i,j}{1}; % lowest calcium conc.
-			temp = mean(I(4e3:5e3,:));
-			Imax_WT(:,i,j) = temp; 
-		end
+for i = 1:max(cell_id)
+	if all(ismember(all_ca_levels,unique(Ca_levels(find(cell_id == i & genotype == 1)))))
+		good_ctrl_cells = [good_ctrl_cells; i];
 	end
-end
-
-c = parula(34);
-
-for i = 1:4
-	temp = squeeze(Imax_WT(:,i,:));
-	for j = 1:3:33
-		plot(ax(i),Ca,temp(j,:),'-+','Color',c(j,:))
-		xlabel(ax(i),'Ca^2^+ (M)')
-		ylabel(ax(i),'Current')
-		set(ax(i),'YLim',[0 18000],'XTick',logspace(-9,-3,7),'YLim',[1 1e5],'YTick',logspace(1,5,5))
-		title(ax(i),['Cell ' oval(i) ' (+EAG)'])
+	if all(ismember(all_ca_levels,unique(Ca_levels(find(cell_id == i & genotype == 2)))))
+		good_wt_cells = [good_wt_cells; i];
+	end
+	if all(ismember(all_ca_levels,unique(Ca_levels(find(cell_id == i & genotype == 3)))))
+		good_mut_cells = [good_mut_cells; i];
 	end
 end
 
 
-% average across all cells for which we have all Calcium levels 
-Imax_WT = squeeze(nanmean(Imax_WT(:,1:4,:),2));
+g_inf_0 = zeros(length(V_space),length(Ca_space));
+g_inf_wt = zeros(length(V_space),length(Ca_space));
+g_inf_mut = zeros(length(V_space),length(Ca_space));
+for i = 1:length(Ca_space)
+	temp = g_inf(ismember(cell_id,good_ctrl_cells) & Ca_levels == Ca_space(i) & genotype == 1);
+	temp = mean(reshape(temp,33,length(temp)/33),2);
+	g_inf_0(:,i) = temp;
 
+	temp = g_inf(ismember(cell_id,good_wt_cells) & Ca_levels == Ca_space(i) & genotype == 2);
+	temp = mean(reshape(temp,33,length(temp)/33),2);
+	g_inf_wt(:,i) = temp;
 
-% now get the control 
-load(joinPath(path_name,'NoEAGData.mat'))
-
-clear ax
-for i = 1:3
-	ax(i) = subplot(2,3,i+3); hold on
-	set(ax(i),'XScale','log','YScale','log')
+	temp = g_inf(ismember(cell_id,good_mut_cells) & Ca_levels == Ca_space(i) & genotype == 3);
+	temp = mean(reshape(temp,33,length(temp)/33),2);
+	g_inf_mut(:,i) = temp;
 end
 
-for i = 1:5
-	for j = 1:5
-		if ~isempty(NoEAGFile{i,j})
-			I = NoEAGFile{i,j}{1}; 
-			temp = mean(I(4e3:5e3,:));
-			Imax_Control(:,i,j) = temp; 
-		end
-	end
-end
+g_inf_wt = g_inf_wt - g_inf_0;
+g_inf_mut = g_inf_mut - g_inf_0;
 
-c = parula(34);
-
-for i = 1:3
-	temp = squeeze(Imax_Control(:,i,:));
-	for j = 1:3:33
-		plot(ax(i),Ca,temp(j,:),'-+','Color',c(j,:))
-		xlabel(ax(i),'Ca^2^+ (M)')
-		ylabel(ax(i),'Current')
-		set(ax(i),'YLim',[0 18000],'XTick',logspace(-9,-3,7),'YLim',[1 1e5],'YTick',logspace(1,5,5))
-		title(ax(i),['Cell ' oval(i) ' (-EAG)'])
-	end
-end
-
-h = colorbar;
-caxis([-80 80])
-
-title(h,'V (mV)')
-
-prettyFig();
-
-if being_published
-	snapnow
-	delete(gcf)
-end
-
-
-% average across all cells
-Imax_Control = squeeze(nanmean(Imax_Control(:,1:3,:),2));
-
-
-%%
-% Now I average over all cells, and compare the curves between cells that have EAG and cells that don't. (a) shows the mean EAG currents as a function of the Calcium concentration -- they seem to decrease with increasing Calcium concentration. In (b), I plot the highest curve (the curve @ 80mV) and fit a simple function to this. I choose a Hill-like function, and it seems to a decent job at predicting how Calcium inhibits EAG currents. 
-
-Imax = Imax_WT - Imax_Control;
-
-% since the fourth column is empty, skip it
-Imax(:,4) = [];
-
-figure('outerposition',[0 0 1400 701],'PaperUnits','points','PaperSize',[1400 701]); hold on
-subplot(1,2,1); hold on
-for i = 1:5:33
-	plot(Ca([1 2 3 5]),Imax(i,:),'-+','Color',c(i,:))
-end
-set(gca,'YLim',[-500 7000],'XTick',logspace(-9,-3,7),'YScale','linear','XScale','log')
-xlabel('Ca^2^+ (M)')
-ylabel('Mean EAG Current')
-
-h = colorbar;
-caxis([-80 80])
-
-title(h,'V (mV)')
-
-subplot(1,2,2); hold on
-i = 31;
-x = Ca([1 2 3 5]);
-y = Imax(i,:);
-y = y/max(y);
-
-f = fittype('A./(x+A)');
-ff = fit(x(:),y(:),f,'StartPoint',[1]);
-xx = logspace(-9,1,1e4);
-plot(xx,ff(xx),'r')
-
-set(gca,'YLim',[0 1],'XTick',logspace(-9,-3,7),'XLim',[1e-9 1e-3],'XScale','log')
-for i = 31
-	y = Imax(i,:);
-	y = y/max(y);
-	plot(x,y,'+','Color',c(i,:),'MarkerSize',24)
-end
-ylabel('m_{EAG}')
-xlabel('Ca^2^+ (M)')
-legend({'Fit','Data @ 80mV'})
-
-prettyFig();
-
-t =  '$\frac{6\mu M}{[Ca^{2+}]+6\mu M}$';
-h = text(1e-8,.5,t,'interpreter','latex','FontSize',24);
-
-
-labelFigure('x_offset',-.05,'y_offset',-.01,'font_size',24)
-
-if being_published
-	snapnow
-	delete(gcf)
-end
-
-
-%% How do activity timescales depend on Calcium? 
-% In this section, I check to see if the timescale of EAG current activation depends on the Calcium concentration. 
-
-
-V = linspace(-80,80,33);
-t = linspace(0,500,5000);
-I_WT = NaN(length(V),12,5000,j);
-I_control = NaN(length(V),12,5000,j);
-
-% first do WT. 
-load(joinPath(path_name,'WTData.mat'))
-
-for i = 1:12
-	for j = 1:5
-		if ~isempty(WTFile{i,j})
-			temp = WTFile{i,j}{1}; % lowest calcium conc.
-			for k = 1:33
-				I_WT(k,i,:,j) = temp(52:end,k);
-			end
-		end
-	end
-end
-
-% average over all neurons 
-I_WT = squeeze(nanmean(I_WT,2));
-
-clear temp
-% do the controls
-load(joinPath(path_name,'NoEAGData.mat'))
-
-for i = 1:5
-	for j = 1:5
-		if ~isempty(NoEAGFile{i,j})
-			temp = NoEAGFile{i,j}{1}; % lowest calcium conc.
-			for k = 1:33
-				I_control(k,i,:,j) = temp(52:end,k);
-			end
-		end
-	end
-end
-
-% average over all neurons 
-I_control = squeeze(nanmean(I_control,2));
-
-% subtract
-I = I_WT - I_control;
-
-figure('outerposition',[0 0 1666 902],'PaperUnits','points','PaperSize',[1666 902]); hold on
-clear ax ax2
-% plot time traces 
-example_V = 20:20:80;
-for i = 1:4
-	ax(i) = subplot(2,4,i); hold on
-	ax2(i) = subplot(2,4,i+4); hold on
-	xlabel(ax(i),'Time (ms)')
-	xlabel(ax2(i),'Time (ms)')
-	ylabel(ax(i),'Mean EAG current')
-	ylabel(ax2(i),'Mean EAG current (norm)')
-	set(ax(i),'YLim',[-500 6000])
-	set(ax2(i),'YLim',[0 1.1])
-end
-
+figure('outerposition',[20 200 1501 500],'PaperUnits','points','PaperSize',[1501 500]); hold on
+subplot(1,3,1); hold on
 c = parula(6);
-L = {'13nM','100nM','10uM','100uM','500uM'};
 clear l
-for i = 1:4
-	thisI = squeeze(I(find(V == example_V(i)),:,:));
-	for j = 1:5
-		y = thisI(:,j);
-		l(j) = plot(ax(i),t,y,'Color',c(j,:));
-		y = y/mean(y(4e3:4.5e3));
-		plot(ax2(i),t,y,'Color',c(j,:))
-		title(ax(i),['V = ' oval(example_V(i)) ' mV'])
-
-
-	end
-	if i == 1
-		legend(l,L);
-	end
+for i = 1:length(Ca_space)
+	l(i) = plot(V_space,g_inf_wt(:,i),'Color',c(i,:));
 end
+L = {'13nM','100nM','10uM','100uM','500uM'};
+legend(l,L,'location','northwest')
+title('WT EAG')
+xlabel('Membrane potential (mV)')
+ylabel('Conductance')
+
+subplot(1,3,2); hold on
+c = parula(6);
+for i = 1:length(Ca_space)
+	plot(V_space,g_inf_mut(:,i),'Color',c(i,:))
+end
+title('Mutated EAG')
+xlabel('Membrane potential (mV)')
+ylabel('Conductance')
+
+subplot(1,3,3); hold on
+c = parula(6);
+for i = 1:length(Ca_space)
+	y_wt = g_inf_wt(:,i)/max(max(g_inf_wt));
+	y_mut = g_inf_mut(:,i)/max(max(g_inf_mut));
+	plot(V_space,y_wt,'Color',c(i,:))
+	plot(V_space,y_mut,'--','Color',c(i,:))
+end
+title('WT vs Mut (dashed)')
+xlabel('Membrane potential (mV)')
+ylabel('Conductance')
 
 
-prettyFig()
 
-if being_published	
-	snapnow	
+prettyFig();
+
+if being_published
+	snapnow
 	delete(gcf)
 end
 
 %%
-% These traces don't look very different in their kinetics, so I will neglect the effect of Calcium on the kinetics. 
-
-%% Comparison to Potassium Channels
-% In this section, I compare the gating functions of the EAG channels that I estimate here to "normal" Potassium channels as in Liu et al. to get a sense of how different these channels are, and if they make sense. 
-
-
-
-% define functions
-boltz = @(V,A,B) (1./(1 + exp((V+A)./B)));
-tauX = @(V,A,B,D,E) (A - B./(1+exp((V+D)./E)));
-
-% m_inf
-mNainf = @(V) (boltz(V,25.5,-5.29));
-mKinf = @(V) boltz(V,12.3,-11.8);
-mEAGinf = @(V,Ca) boltz(V,-22.28,-23.39).*(6./(6+Ca));
-
-
-% tau_m
-taumNa = @(V) tauX(V,1.32,1.26,120.0,-25.0);
-taumK = @(V) tauX(V,7.2,6.4,28.3,-19.2);
-taumEAG = @(V) tauX(V,-0.67,-26500,283,46.03);
-
-V = linspace(-80,80,1e3);
+% Now I plot the conductance as a function of the Calcium concentration, for various holding potentials, for both the WT and mutant EAG channels. Note that the WT EAG channels do not have a monotonic relationship with Calcium. For some (unknown) reason, the conductance *increases* from 13 nM to 100 nM, and then decreases. The mutated EAG channels, on the other hand, have a monotonically decreasing conductance that depends on Calcium concentration. 
 
 figure('outerposition',[0 0 1000 500],'PaperUnits','points','PaperSize',[1000 500]); hold on
-
 subplot(1,2,1); hold on
-plot(V,mNainf(V))
-plot(V,mKinf(V))
-plot(V,mEAGinf(V,0.05))
-ylabel('z_{Inf}')
-xlabel('Membrane potential (mV)')
+c = parula(34);
+for i = 1:3:length(V_space)
+	x = Ca_space([1:3 5]);
+	y = g_inf_wt(i,[1:3 5]);
+	plot(x,y,'-+','Color',c(i,:))
+end
+set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]))
+xlabel('[Ca^2^+] (M)')
+ylabel('Conductance')
+title('WT EAG')
 
 subplot(1,2,2); hold on
-plot(V,taumNa(V))
-plot(V,taumK(V))
-plot(V,taumEAG(V))
-ylabel('\tau (ms)')
-xlabel('Membrane potential (mV)')
-set(gca,'YScale','log')
-legend({'NaV','K','EAG'})
+for i = 1:3:length(V_space)
+	x = Ca_space([1:3 5]);
+	y = g_inf_mut(i,[1:3 5]);
+	plot(x,y,'-+','Color',c(i,:))
+end
+set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]))
+xlabel('[Ca^2^+] (M)')
+ylabel('Conductance')
+title('Mut EAG')
 
 prettyFig();
 
@@ -821,6 +825,83 @@ if being_published
 	snapnow
 	delete(gcf)
 end
+
+
+%%
+% Now, I fit some simple functions to the conductances at the highest holding potential (because that is the easiest to interpret). Using these functions, I can capture the fact that mutated EAG channels are less inhibited by $500 \mu M$ Calcium than WT EAG channels, but I neglect the non-monotonic nature of the WT EAG channels, and the corresponding relative decrease in WT EAG channels compared to mutated channels at very low Calcium concentrations. Note that the effect of the mutation is quite subtle: a small rightward shift (loss in sensitivity to Calcium) together with a small offset (persistent activity even at very high Calcium).
+
+f = fittype('A.*(1-B)./(x+A) + B');
+M = max([g_inf_mut(:); g_inf_wt(:)]);
+
+figure('outerposition',[0 0 1501 500],'PaperUnits','points','PaperSize',[1501 500]); hold on
+subplot(1,3,1); hold on
+
+c = parula(length(V_space)+1);
+
+all_x = []; all_y = [];
+for i = 33:1:length(V_space)
+	x = Ca_space([1:3 5]);
+	y = g_inf_wt(i,[1:3 5]);
+	y = y/M;
+	y = y.^2; % assuming p = 2
+	plot(x,y,'k+')
+	all_x = [all_x(:); x(:)];
+	all_y = [all_y(:); y(:)];
+end
+
+set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]),'YLim',[0 1.5])
+xlabel('[Ca^2^+] (M)')
+ylabel('m_{Inf}')
+title('WT EAG')
+
+ff = fit(all_x(:),all_y(:),f,'StartPoint',[1 .1],'Lower',[0 0],'Upper',[1 0]);
+temp = logspace(log10(min(Ca_space)),log10(max(Ca_space)),1e3);
+plot(temp,ff(temp),'k')
+
+subplot(1,3,3); hold on
+plot(temp,ff(temp),'k')
+
+subplot(1,3,1); hold on
+t =  ['$\frac{' oval((ff.A)*1e6) '\mu M}{[Ca^{2+}]+ ' oval((ff.A)*1e6) ' \mu M}+ ' oval(ff.B) '$'];
+h = text(1e-7,1.1,t,'interpreter','latex','FontSize',24,'Color','r');
+
+subplot(1,3,2); hold on
+all_x = []; all_y = [];
+for i = 33:1:length(V_space)
+	x = Ca_space([1:3 5]);
+	y = g_inf_mut(i,[1:3 5]);
+	y = y/M;
+	y = y.^2; % assuming p = 2
+	plot(x,y,'r+')
+	all_x = [all_x(:); x(:)];
+	all_y = [all_y(:); y(:)];
+end
+
+set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]),'YLim',[0 1.5]')
+xlabel('[Ca^2^+] (M)')
+ylabel('m_{Inf}')
+title('Mut EAG')
+
+ff = fit(all_x(:),all_y(:),f,'StartPoint',[1 .1],'Lower',[0 min(all_y)]);
+temp = logspace(log10(min(Ca_space)),log10(max(Ca_space)),1e3);
+plot(temp,ff(temp),'r')
+
+t =  ['$\frac{' oval((ff.A)*1e6) '\mu M}{[Ca^{2+}]+ ' oval((ff.A)*1e6) ' \mu M}+ ' oval(ff.B) '$'];
+h = text(1e-7,1.1,t,'interpreter','latex','FontSize',24,'Color','r');
+
+subplot(1,3,3); hold on
+plot(temp,ff(temp),'r')
+legend({'WT','Mutated'})
+set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]),'YLim',[0 1.5]')
+
+prettyFig();
+
+if being_published
+	snapnow
+	delete(gcf)
+end
+
+
 
 %% Version Info
 %
