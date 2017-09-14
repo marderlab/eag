@@ -30,13 +30,13 @@ warning off
 n = neuron;
 warning on
 
-n.set('g_Na',0)
-n.set('g_CaT',0)
-n.set('g_CaS',0)
-n.set('g_leak',0)
-n.set('g_A',0)
-n.set('g_KCa',0)
-n.set('g_H',0)
+n.parameters.gNa=  0;
+n.parameters.gCaT=  0;
+n.parameters.gCaS=  0;
+n.parameters.gLeak=  0;
+n.parameters.gA=  0;
+n.parameters.gKCa=  0;
+n.parameters.gH=  0;
 
 n.implementation = 'SGS/MATLAB';
 n.t_end = 100;
@@ -197,12 +197,103 @@ if being_published
 	delete(gcf)
 end
 
+%% Simulations: confounding effects of leak currents
+% What happens when leak currents also exist in the cell? The following figure shows the same analysis, but with a small leak conductance in the cell together with the potassium conductance. (a) shows the resulting current-voltage curve. It looks very similar to the old I-V curve, but a more careful examination reveals some key differences: that it is actually negative for very low membrane potentials, and that it looks linear at the very beginning. (b) shows this more clearly, which is the same curve, but zoomed into the region of interest. Note that it is strikingly linear. The membrane potential at which it crosses 0 current is indicated, and it turns out that it corresponds to the reversal potential of the leak current (-50 mV). So we have already characterized one key parameter of the leak current. 
 
-%% Estimating voltage dependence of gating variable 
+%%
+% Since leak currents are Ohmic, the region of the I-V curve where leak currents dominate should be a straight line. To determine this, I plot $r^2$ of linear fits starting from the lowest holding potential, as a function of membrane potential (c). We can clearly see that for membrane potentials < -20 mV, leak currents dominate, since $r^2$ is close to 1 here, suggesting perfect linearity. In (d), I plot the slope of these linear fits as a function of holding potential. The slope has units of $\mu S$. I've also indicated the true leak conductance with a red line, and we can see that the calculated slope is good agreement with the ground truth for membrane potentials < -20 mV. We have thus characterized both the reversal potential and the absolute strength of the leak conductance, despite it co-existing with a voltage-gated Potassium current. 
+
+warning off
+n = neuron;
+warning on
+
+n.parameters.gNa=  0;
+n.parameters.gCaT=  0;
+n.parameters.gCaS=  0;
+n.parameters.gLeak=  100;
+n.parameters.gA=  0;
+n.parameters.gKCa=  0;
+n.parameters.gH=  0;
+
+n.implementation = 'SGS/MATLAB';
+n.t_end = 100;
+
+time = n.dt:n.dt:n.t_end;
+
+V_clamp = 0*(time) - 50;
+n.voltage_clamp = V_clamp;
+[~,~,N] = n.integrate;
+
+
+V = linspace(-80,80,33);
+I_inf = 0*V;
+
+all_I = zeros(length(time),length(V));
+
+for i = 1:length(V)
+	V_clamp = 0*(time) - 80;
+	V_clamp(1e3:end) = V(i);
+	n.voltage_clamp = V_clamp;
+	[~, ~, N] = n.integrate;
+	all_I(:,i) = N(:,14);
+end
+
+mI = all_I(end,:);
+
+figure('outerposition',[200 200 1401 1001],'PaperUnits','points','PaperSize',[1401 1001]); hold on
+subplot(2,2,1); hold on
+plot(V,mI,'k+-')
+xlabel('Membrane potential (mV)')
+ylabel('Injected current (nA)')
+
+subplot(2,2,2); hold on
+plot(V,mI,'k+-')
+plot([-50 -50],[-1e3 1e3],'r:')
+plot([-500 50],[0 0],'k:')
+xlabel('Membrane potential (mV)')
+ylabel('Injected current (nA)')
+set(gca,'XLim',[-80 -10],'YLim',[-200 400])
+
+% fit lines progressively and estimate slopes
+r2 = NaN*V;
+slopes = NaN*V;
+
+for i = 2:length(V)
+	x = V(1:i);
+	y = mI(1:i);
+	[ff, gof] = fit(x(:),y(:),'poly1');
+	r2(i) = gof.rsquare;
+	slopes(i) = ff.p1;
+end
+
+subplot(2,2,3); hold on
+plot(V,r2,'k+')
+xlabel('Membrane potential (mV)')
+ylabel('r^2 of Ohmic fit')
+
+subplot(2,2,4); hold on
+plot(V,slopes,'k+')
+xlabel('Membrane potential (mV)')
+ylabel('Slope of Ohmic fit (\muS)')
+
+plot([-90 90],[6.3 6.3],'r:')
+set(gca,'YScale','log','XLim',[-80 80])
+
+prettyFig();
+
+labelFigure('x_offset',-.01,'y_offset',-.0,'font_size',28)
+
+if being_published
+	snapnow
+	delete(gcf)
+end
+
+
+%% EAG channels: estimating voltage dependence of gating variable 
 % To model EAG channels, I need to understand how these channels vary their activity as a function of both voltage and Calcium concentrations. These channels don't inactivate, so their behavior can be described by a single gating variable ($m$). In Hodgkin-Huxley terms, we want to determine how the steady state value of $m$ depends on the voltage and Calcium, and how the timescale of m changes with voltage and Calcium. 
 
 %%
-% First, I estimate the voltage dependence on the gating variable by looking at currents in voltage clamp in HEK cells.In this data, EAG channels were inserted into HEK cells, and currents recorded from them in voltage clamp. The experiment was repeated with HEK cells without EAG, so subtracting one from the other should give us "pure" EAG currents. 
+% First, I estimate the voltage dependence on the gating variable by looking at currents in voltage clamp in HEK cells. In this data, EAG channels were inserted into HEK cells, and currents recorded from them in voltage clamp. The experiment was repeated with HEK cells without EAG.  
 
 
 % load all the data and convert it into a nicer format
@@ -276,11 +367,249 @@ for i = 1:size(MutFile,1)
 	end
 end
 
-% remove baseline from every current trace
-for i = 1:size(all_I,2)
-	all_I(:,i) = all_I(:,i) - mean(all_I(1:50,i));
+% % remove baseline from every current trace
+% for i = 1:size(all_I,2)
+% 	all_I(:,i) = all_I(:,i) - mean(all_I(1:50,i));
+% end
+
+
+% compute asymptotic currents for all traces
+I_inf = mean(all_I(4e3:5e3,:));
+
+%% A principled way to determine leak conductances from noisy data
+% First, I look at the currents of each neuron and see if I can determine leak currents in these cells that I can clearly separate from the EAG currents. Leak currents are Ohmic, and are therefore manifest as linear curves of I vs. V. (a) show sthe I-V curves for all the HEK cells expressing EAG at 13 nM Calcium. Each line is a different cell. (b) shows the $r^2$ of the linear fit to these curves, as a function of membrane potential, similar to the curves I showed in the simulated data. Only 4 curves are shown for clarity. (c) shows the slopes of these fits, as a function of membrane potential, for each cell. 
+
+%%
+% In the simulations, there was no problem identifying the region where leak currents dominated, as there was no noise, and it was perfectly linear. In real data, deviations from linearity can arise due to either voltage gated channels, or due to random noise. How do we tell the difference? What subset of the data should I use to estimate the leak conductance? There isn't one perfect answer: in (d-e), I choose different regions to illustrate what happens to my estimates of leak conductance (on the Y-axis) and the leak reversal potential (X-axis). Each cross is a single neuron, and the error bars indicate 95% confidence intervals. A more principled way to do this is to pick the range of V based on the curves in (b) (basically, you find the point where the $r^2$ curve drops < .9). This is what I did in (f), and this leads to estimates of both leak conductance and reversal potentials with much lower errors. 
+
+figure('outerposition',[0 0 1602 1201],'PaperUnits','points','PaperSize',[1602 1201]); hold on
+
+subplot(2,3,1); hold on
+for i = 1:max(cell_id)
+	this_I = I_inf(cell_id == i & genotype == 2 & Ca_levels == Ca_space(1));
+	plot(V_space,this_I,'+-')
+end
+set(gca,'XLim',[-80 0],'YLim',[-2000 4000])
+xlabel('Membrane potential (mV)')
+ylabel('Current (pA)')
+
+E_leak = NaN(max(cell_id),3);
+E_leak_err = NaN(max(cell_id),3);
+g_leak = NaN(max(cell_id),3);
+g_leak_err = NaN(max(cell_id),3);
+
+cutoff = [5 10 13];
+
+for i = 1:max(cell_id)
+	% fit lines progressively and estimate slopes
+	r2 = NaN*V_space;
+	slopes = NaN*V_space;
+
+	this_I = I_inf(cell_id == i & genotype == 2 & Ca_levels == Ca_space(1));
+
+	for j = 2:length(V_space)
+		x = V_space(1:j);
+		y = this_I(1:j);
+		[ff, gof] = fit(y(:),x(:),'poly1');
+		r2(j) = gof.rsquare;
+		slopes(j) = 1/ff.p1;
+
+		for k = 1:length(cutoff)-1
+			if j == cutoff(k)
+				E_leak(i,k) = ff.p2;
+				ci = confint(ff);
+				E_leak_err(i,k) = diff(ci(:,2))/2;
+				g_leak(i,k) = slopes(j);
+				g_leak_err(i,k) = abs(diff(1./ci(:,1)))/2;
+			end
+		end
+	end
+
+	% also calculate it dynamically 
+	dynamic_cutoff = find(r2(V_space<0)>.9,1,'last');
+	x = V_space(1:dynamic_cutoff);
+	y = this_I(1:dynamic_cutoff);
+	[ff, gof] = fit(y(:),x(:),'poly1');
+
+	E_leak(i,3) = ff.p2;
+	g_leak(i,3) = 1/ff.p1;
+	if dynamic_cutoff > 2
+		ci = confint(ff);
+		E_leak_err(i,3) = diff(ci(:,2))/2;
+		g_leak_err(i,3) = abs(diff(1./ci(:,1)))/2;
+	end
+
+	subplot(2,3,2); hold on
+	if ismember(i, [1 3 9 12])
+		plot(V_space,r2,'+-')
+	else
+		plot(NaN,r2,'+-') % preserves color order
+	end
+
+	subplot(2,3,3); hold on
+	plot(V_space,slopes,'+-')
+	
+
 end
 
+subplot(2,3,2); hold on
+xlabel('Membrane potential (mV)')
+ylabel('r^2 of Ohmic fit')
+
+subplot(2,3,3); hold on
+xlabel('Membrane potential (mV)')
+ylabel('Slope of Ohmic fit (nS)')
+set(gca,'YScale','linear','XLim',[-80 80],'YLim',[0 130])
+
+for k = 1:length(cutoff)
+	subplot(2,3,3 + k); hold on
+	for i = 1:max(cell_id)
+		errorbar(E_leak(i,k),g_leak(i,k),g_leak_err(i,k),g_leak_err(i,k),E_leak_err(i,k),E_leak_err(i,k),'o')
+	end
+	set(gca,'XLim',[-80 80],'YLim',[0 130])
+	xlabel('E_{leak} (mV)')
+	ylabel('g_{leak} (nS)')
+	title(['-80 to ' oval(V_space(cutoff(k))) ' mV'])
+end
+
+title('Dynamic V range')
+
+prettyFig();
+
+labelFigure('x_offset',-.01,'y_offset',-.0,'font_size',28)
+
+
+
+
+%%
+% However, I later realized that this algorithm tends to systematically overestimate the leak conductances. I default back to using the region from -80 mV to -60 mV to estimating the leak currents. Now, I apply this method to every trace in the dataset, and estimate leak currents for every neuron. 
+
+g_leak = NaN(max(cell_id),3,5);
+g_leak_err = NaN(max(cell_id),3,5);
+E_leak = NaN(max(cell_id),3,5);
+E_leak_err = NaN(max(cell_id),3,5);
+
+
+for i = 1:max(genotype)
+	for j = 1:length(Ca_space)
+		for k = 1:max(cell_id)
+			this_I = I_inf(cell_id == k & genotype == i & Ca_levels == Ca_space(j));
+			if ~isempty(this_I)
+				[g_leak(k,i,j), E_leak(k,i,j), g_leak_err(k,i,j), E_leak_err(k,i,j)] = findLeakCurrent2(this_I,V_space);
+			end
+		end
+	end
+end
+
+
+
+%%
+% In this figure, I look at how the leak currents of individual cells vary with Calcium concentration. Each figure corresponds to data from a single cell. The top row shows HEK cells w/o EAG, the second row HEK cells with WT EAG, and the third row shows data from HEK cells with mutant EAG. 
+
+figure('outerposition',[0 0 1100 1111],'PaperUnits','points','PaperSize',[1100 1111]); hold on
+
+c = parula(6); % for Calcium colors
+
+for i = 1:max(genotype)
+
+	gL = squeeze(g_leak(:,i,:));
+	gL_err = squeeze(g_leak_err(:,i,:));
+	EL = squeeze(E_leak(:,i,:));
+	EL_err = squeeze(E_leak_err(:,i,:));
+
+	for j = 1:3
+		subplot(3,3,(i-1)*3 + j); hold on
+		for k = 1:5
+			errorbar(EL(j,k),gL(j,k),gL_err(j,k),gL_err(j,k),EL_err(j,k),EL_err(j,k),'o','Color',c(k,:))
+		end
+		set(gca,'XLim',[-100 10],'YLim',[0 20])
+		xlabel('E_{leak} (mV)')
+		ylabel('g_{leak} (nS)')
+
+		switch i 
+		case 1
+			title(['No EAG #' oval(j)])
+		case 2
+			title(['WT EAG #' oval(j)])
+		case 3
+			title(['Mut EAG #' oval(j)])
+		end
+	end
+end
+
+prettyFig();
+
+if being_published
+	snapnow
+	delete(gcf)
+end
+
+
+%%
+% Now I compare all cells across genotypes and group by Calcium concentration. In the following figure, each plot groups all cells together by the intracellular Calcium concentration. HEK cells without EAG are shown in black, HEK cells with WT EAG are shown in blue, and HEK cells with mutant EAG are shown in red. Each dot is a single cell, and the error bars are 95% confidence intervals. There doesn't seem to be a very strong pattern here.  
+
+L = {'13nM','100nM','10uM','100uM','500uM'};
+
+figure('outerposition',[0 0 1201 901],'PaperUnits','points','PaperSize',[1201 901]); hold on
+for i = 1:5
+	subplot(2,3,i); hold on
+	l1 = errorbar(E_leak(:,1,i),g_leak(:,1,i),g_leak_err(:,1,i),g_leak_err(:,1,i),E_leak_err(:,1,i),E_leak_err(:,1,i),'o','Color','k');
+	l2 = errorbar(E_leak(:,2,i),g_leak(:,2,i),g_leak_err(:,2,i),g_leak_err(:,2,i),E_leak_err(:,2,i),E_leak_err(:,2,i),'o','Color','b');
+	l3 = errorbar(E_leak(:,3,i),g_leak(:,3,i),g_leak_err(:,3,i),g_leak_err(:,3,i),E_leak_err(:,3,i),E_leak_err(:,3,i),'o','Color','r');
+
+	title(['Ca = ' L{i}])
+	xlabel('E_{leak} (mV)')
+	ylabel('g_{leak} (nS)')
+	set(gca,'XLim',[-100 80],'YLim',[0 30])
+end
+
+l = legend([l1,l2,l3],{'No EAG','WT EAG','Mut EAG'});
+l.Position = [0.6561 0.3116 0.0883 0.0785];
+prettyFig();
+
+if being_published
+	snapnow
+	delete(gcf)
+end
+
+
+% subtract the estimated leak currents from the raw current traces 
+fixed_I = all_I;
+good_cells = g_leak*0;
+for i = 1:3
+	for j = 1:5
+		for k = 1:max(cell_id)
+			these_currents = all_I(:,cell_id == k & genotype == i & Ca_levels == Ca_space(j));
+
+			if size(these_currents,2) == 0
+				continue
+			end
+
+			fixed_currents = these_currents;
+
+			m = g_leak(k,i,j);
+			c = -E_leak(k,i,j)*g_leak(k,i,j);
+
+			for l = 1:33
+				estimated_leak_I = m*(V_space(l)) + c;
+				fixed_currents(:,l) = these_currents(:,l) - estimated_leak_I;
+			end
+
+			allowed_err = Inf;
+
+			if g_leak_err(k,i,j)/g_leak(k,i,j) < allowed_err & E_leak_err(k,i,j)/E_leak(k,i,j) < allowed_err & g_leak(k,i,j) > 0
+				fixed_I(:,cell_id == k & genotype == i & Ca_levels == Ca_space(j)) = fixed_currents;
+
+				good_cells(k,i,j) = 1;
+
+			end
+		end
+	end
+end
+
+
+old_I  = all_I;
+all_I = fixed_I;
 
 % convert all_I into conductances
 g = all_I;
@@ -293,7 +622,7 @@ end
 g_inf = mean(g(4e3:5e3,:));
 
 %%
-% In the following figure, I plot all the current traces in current clamp mode for the lowest Calcium case (13 nM). For now, I neglect the Calcium dependence and focus on the voltage dependence. The top row shows data from HEK cells without the EAG channel, and the bottom row shows data from HEK cells with the EAG channel. (a) shows the current traces for a single HEK cell without EAG channels at 13nM Calcium. (b) is the same data, but the currents are converted into conductances. (c) Shows the conductances for all the cells in the dataset. (d-f) is in the same format, but for cells that do express EAG. 
+% In the following figure, I plot all the current traces in current clamp mode for the lowest Calcium case (13 nM). For now, I neglect the Calcium dependence and focus on the voltage dependence. The top row shows data from HEK cells without the EAG channel, and the bottom row shows data from HEK cells with the EAG channel. (a) shows the current traces for a single HEK cell without EAG channels at 13nM Calcium. (b) is the same data, but the currents are converted into conductances. (c) Shows the conductances for all the cells in the dataset. (d-f) is in the same format, but for cells that do express EAG. Currents here have been leak subtracted on a per-cell, per-condition basis as previously discussed. 
 
 figure('outerposition',[0 0 1501 901],'PaperUnits','points','PaperSize',[1501 901]); hold on
 
@@ -324,17 +653,16 @@ set(gca,'YLim',[0 100])
 title('w/o EAG, 1 cell')
 
 % now show the conductance-voltage curves for all cells 
-clear ax1 ax2
-ax1 = subplot(2,3,3); hold on
+subplot(2,3,3); hold on
 for i = 1:max(cell_id)
 	y = g_inf(cell_id == i & Ca_levels == 13e-9 & genotype == 1);
 	if ~isempty(y)
-		plot(ax1,V_space,y)
+		plot(V_space,y)
 	end
 end
-xlabel(ax1,'Membrane potential (mV)')
-ylabel(ax1,'Conductance')
-title(ax1,'w/o EAG, all cells')
+xlabel('Membrane potential (mV)')
+ylabel('Conductance')
+title('w/o EAG, all cells')
 set(gca,'YLim',[0 100])
 
 % now show the cells with EAG
@@ -364,22 +692,22 @@ set(gca,'YLim',[0 100])
 title('with EAG, 1 cell')
 
 % now show the conductance-voltage curves for all cells 
-clear ax1 ax2
-ax1 = subplot(2,3,6); hold on
+
+subplot(2,3,6); hold on
 for i = 1:max(cell_id)
 	y = g_inf(cell_id == i & Ca_levels == 13e-9 & genotype == 2);
 	if ~isempty(y)
-		plot(ax1,V_space,y,'DisplayName',oval(i))
+		plot(V_space,y,'DisplayName',oval(i))
 	end
 end
-xlabel(ax1,'Membrane potential (mV)')
-ylabel(ax1,'Conductance')
-title(ax1,'with EAG, cells')
+xlabel('Membrane potential (mV)')
+ylabel('Conductance')
+title('with EAG, cells')
 set(gca,'YLim',[0 100])
 
 prettyFig();
 
- labelFigure('x_offset',-.01,'y_offset',-.0,'font_size',28)
+labelFigure('x_offset',-.01,'y_offset',-.0,'font_size',28)
 
 if being_published
 	snapnow
@@ -387,11 +715,10 @@ if being_published
 end
 
 
-
 %%
 % Notice that there is one massive outlier in the WT EAG cells -- for whatever reason, this cell has much bigger conductances for every membrane potential. I'm going to remove this from the dataset. 
 
-rm_this = find(cell_id < 3 & genotype == 2); % both 1 and 2 are bad
+rm_this = find(cell_id < 3 & genotype == 2); % 1 & 2 are bad
 genotype(rm_this) = [];
 all_I(:,rm_this) = [];
 Ca_levels(rm_this) = [];
@@ -418,10 +745,12 @@ figure('outerposition',[0 0 1301 997],'PaperUnits','points','PaperSize',[1301 99
 p = [1:8];
 r2 = NaN*p;
 for i = 1:length(p)
-	this_g = g_EAG.^(1/p(i));
+	this_g = g_EAG;
+	this_g = this_g - min(this_g);
+	this_g = real(this_g.^(1/p(i)));
 	this_g = this_g/this_g(end);
 
-	ff = fit(vectorise(V_space(2:end)),vectorise(this_g(2:end)),boltz,'StartPoint',[12.3, -11.8]);
+	ff = fit(vectorise(V_space(2:end)),vectorise(this_g(2:end)),boltz,'StartPoint',[50, -20]);
 
 	if i < 6
 		subplot(2,3,p(i)); hold on
@@ -436,7 +765,7 @@ for i = 1:length(p)
 end
 
 % use p = 2 because I think that's correct, and it's close to the minimum
-this_g = g_EAG.^(1/2);
+this_g = real(g_EAG.^(1/2));
 this_g = this_g/this_g(end);
 
 mInfEAG = fit(vectorise(V_space(2:end)),vectorise(this_g(2:end)),boltz,'StartPoint',[12.3, -11.8]);
@@ -654,7 +983,7 @@ end
 %%
 % Now I plot the timescales from this fit as a function of membrane potential, keeping only timescales where the goodness of exponential fit was > 0.8. I do this for various values of $p$, for both the mutant (red) and the WT (black) EAG channels. In each plot below, the black circles are the timescales of exponential fits to time series of estimated gating variable for the WT EAG channels, and the red crosses are timescales of exponential fits to to time series of estimated gating variable for the mutant EAG channels. The dashed lines are functional fits to the crosses or the circles, using standard functions as in Liu et al. or Prinz et al. Note that these channels appear to be much slower than the Potassium channels I simulated at the very beginning.
 
-r2_cutoff = .8;
+r2_cutoff = .5;
 tau_r2_mut(isnan(tau_r2_mut)) = -1;
 figure('outerposition',[0 0 1001 901],'PaperUnits','points','PaperSize',[1001 901]); hold on
 for i = 1:4
