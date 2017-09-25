@@ -11,16 +11,14 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
         % these propoerties are for manipulate
         handles % for GUI elements
         % order is as follows:
-        %     cm  A extCa Ca0  tauCa f   conductances(8)
-        parameter_names = {'C_{m}','A1','A2','Ca_{o}','Ca_{i}','tau_{Ca}','f'  ,'g_{Na}1','g_{Na}2','g_{Ca}','g_{K}1','g_{K}2','g_1','g_2','g_1_2','g_{leak}','g_{EAG}1','g_{EAG}2'}
-        parameters      = [10      .06   .06   3000     0.05      20      15    183       183        2.3      30       30     3e3   3e3     300    .0993,    10, 10]
-        lb              = [0       0     0     1        0.01      1        1     0         0          0        0        0       0     0       0      0, 0, 0];
-        ub              = [100     1     1     1e4      100       999     100   300       300        300      300      300     1e4   1e4     300    300, 300, 300];
-        parameter_units = {'nF/mm^2','mm^2','mm^2','uM','uM',    'ms','uM/nA','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2','mS/cm^2'}
 
+        parameters
+        lb
+        ub
+        units
 
-        E_Na = 50;
-        E_K = -80;
+        E_Na = 72.8;
+        E_K = -106;
         E_leak = -50;
 
         V_drive
@@ -31,61 +29,164 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
 
     properties (Access = protected)
         legal_parameter_names
-        available_implementations = {'SGS/Julia','SGS/MATLAB'};
+        available_implementations = {'SGS/MATLAB'};
     end
 
 
     methods (Access = protected)
         function displayScalarObject(self)
             url = 'https://gitlab.com/marderlab/neuron-network-models/';
-            fprintf(['<a href="' url '">synapticTerminal</a> object with the following properties:\n\n']);
+            fprintf(['<a href="' url '">neuron</a> object with the following properties:\n\n']);
 
 
             fprintf('Parameter         Value\n')
             fprintf('------------     --------\n')
-            for i = 1:length(self.parameter_names)
-                padding_string_size = 17 - length(self.parameter_names{i});
+            f = fieldnames(self.parameters);
+            for i = 1:length(f)
+                padding_string_size = 17 - length(f{i});
                 padding_string = repmat(' ',1,padding_string_size);
-                v = [oval(self.parameters(i)) ' ' self.parameter_units{i}];
-                this_string = [self.parameter_names{i} padding_string v '\n'];
+                v = [oval(self.parameters.(f{i})) ' ' self.units.(f{i})];
+                this_string = [f{i} padding_string v '\n'];
                 fprintf(this_string)
             end
 
             fprintf('\n')
+            disp('Underling implementation: ')
+            fprintf('-----------------------\n')
+            disp(self.implementation)
 
+            fprintf('\n')
+            disp('Version (git hash): ')
+            fprintf('-----------------------\n')
+            disp(gitHash((which(mfilename))))
 
         end % end displayScalarObject
    end % end protected methods
 
     methods
         function self = synapticTerminal()
-            self.constructLegalParameterNames;
+    
 
-            self.implementation = self.available_implementations{2};
+            % define parameters 
+            p.C_m = 10;
+            lb.C_m = 1;
+            ub.C_m = 20;
+            units.C_m = 'nF/mm^2';
 
-            % % add my Julia code 
-            % p = fileparts(which(mfilename));
-            % jl.include(joinPath(p,'param_types.jl')) 
-            % jl.include(joinPath(p,'liu_gating_functions.jl'))
-            % jl.include(joinPath(p,'synapticTerminal.jl'))
-            % jl.include(joinPath(p,'neuronMex.jl'))
-        end % end constructor
+            p.A1 = 1.25e-5;
+            lb.A1 = 1e-6;
+            ub.A1 = 1e-3;
+            units.A1 = 'mm^2';
 
-        function constructLegalParameterNames(self)
+            p.A2 = 1.25e-5;
+            lb.A2 = 1e-6;
+            ub.A2 = 1e-3;
+            units.A2 = 'mm^2';
 
-            % construct legal parameter names from parameter names
-            self.legal_parameter_names = self.parameter_names;
-            for i = 1:length(self.parameter_names)
-                this_name = self.parameter_names{i};
-                this_name = strrep(this_name,'{','');
-                this_name = strrep(this_name,'}','');
-                this_name = strrep(this_name,'/','');
-                this_name = strrep(this_name,'\','');
-                this_name = strrep(this_name,'.','');
-                self.legal_parameter_names{i} = this_name;
+            p.Ca_out = 1500;
+            lb.Ca_out = 0.03;
+            ub.Ca_out = 5e3;
+            units.Ca_out = 'uM';
+
+            p.Ca_in = 250;
+            lb.Ca_in = 100;
+            ub.Ca_in = 500;
+            units.Ca_in = 'uM';
+
+            p.tau_Ca = 50;
+            lb.tau_Ca = 1;
+            ub.tau_Ca = 200;
+            units.tau_Ca = 'ms';
+
+            p.f = 1.496;
+            lb.f = .1;
+            ub.f = 10;
+            units.f = 'uM/nA';
+
+            p.gNa1 = 1830;
+            lb.gNa1 = 0;
+            ub.gNa1 = 1e4;
+            units.gNa1 = 'uS/mm^2';
+
+            p.gNa2 = 1830;
+            lb.gNa2 = 0;
+            ub.gNa2 = 1e4;
+            units.gNa2 = 'uS/mm^2';
+
+            p.gK1 = 610;
+            lb.gK1 = 0;
+            ub.gK1 = 1e4;
+            units.gK1 = 'uS/mm^2';
+
+            p.gK2 = 610;
+            lb.gK2 = 0;
+            ub.gK2 = 1e4;
+            units.gK2 = 'uS/mm^2';
+
+            p.gCa2 = 610;
+            lb.gCa2 = 0;
+            ub.gCa2 = 1e4;
+            units.gCa2 = 'uS/mm^2';
+
+            p.gLeak = .99;
+            lb.gLeak = 0;
+            ub.gLeak = 1e4;
+            units.gLeak = 'uS/mm^2';
+
+            p.gEAG1 = .99;
+            lb.gEAG1 = 0;
+            ub.gEAG1 = 1e4;
+            units.gEAG1 = 'uS/mm^2';
+
+            p.gEAG2 = .99;
+            lb.gEAG2 = 0;
+            ub.gEAG2 = 1e4;
+            units.gEAG2 = 'uS/mm^2';
+
+            p.g1 = 23;
+            lb.g1 = 0;
+            ub.g1 = 1e4;
+            units.g1 = 'uS';
+
+            p.g2 = 23;
+            lb.g2 = 0;
+            ub.g2 = 1e4;
+            units.g2 = 'uS';
+
+            p.g12 = 23;
+            lb.g12 = 0;
+            ub.g12 = 1e4;
+            units.g12 = 'uS';
+
+
+
+            self.implementation = self.available_implementations{1};
+
+            % check if there is something in the cache
+            temp = cache('syn_term_params');
+            if ~isempty(temp)
+                % replace parameters with cached parameters
+                p = temp;
+                % pick some reasonable lower and upper bounds
+                f = fieldnames(temp);
+                for i = 1:length(f)
+                    if  lb.(f{i}) > temp.(f{i})
+                        lb.(f{i}) = temp.(f{i});
+                    end
+                    if  ub.(f{i}) < temp.(f{i})
+                        ub.(f{i}) = temp.(f{i});
+                    end
+                end
             end
 
-        end
+            self.parameters = p;
+            self.lb = lb;
+            self.ub = ub;
+            self.units = units;
+
+        end % end constructor
+
+
 
         function set(self,param,value)
             % check if parameter exists 
@@ -105,10 +206,10 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
             self.V_drive = value;
         end
 
-        function [V1, V2, Ca, currents] = integrate(self)
+        function [V1, V2, Ca, currents,gv] = integrate(self)
             switch self.implementation
             case 'SGS/MATLAB'
-                [V1, V2, Ca, currents] = self.integrate_SGS_MATLAB;
+                [V1, V2, Ca, currents,gv] = self.integrate_SGS_MATLAB;
             case 'SGS/Julia'
                 [V2, Ca, n] = self.integrate_SGS_JULIA;
             otherwise
@@ -117,13 +218,16 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
                    
         end
 
-        function [V1, V2, Ca2, currents] = integrate_SGS_MATLAB(self)
+        function delete(self)
+            % cache the parameters for later use 
+            cache('syn_term_params',self.parameters)
+        end
+
+        function [V1, V2, Ca2, currents, gating_variables] = integrate_SGS_MATLAB(self)
             % pure MATLAB implementation of this model 
 
-             % assemble parameters
-            for i = 1:length(self.parameter_names)
-                feval(@()assignin('caller',self.legal_parameter_names{i}, self.parameters(i)));
-            end
+            % assemble parameters
+            P = self.parameters;
 
 
             % define functions
@@ -134,19 +238,19 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
             mNainf = @(V) (boltz(V,25.5,-5.29));
             mKinf = @(V) boltz(V,12.3,-11.8);
             mCaTinf = @(V) boltz(V,27.1,-7.2);
-            mEAGinf = @(V,Ca) boltz(V,-22.28,-23.39).*(6./(6+Ca));
-
+            mEAGinf = @(V,Ca) boltz(V,23.12,-16.94)*(9.29e-2/(9.29e-3+Ca));
 
             % h_inf 
             hNainf = @(V) (boltz(V,48.9,5.18));
             hCaTinf = @(V) boltz(V,32.1,5.5);
 
-
             % tau_m
             taumNa = @(V) tauX(V,1.32,1.26,120.0,-25.0);
             taumK = @(V) tauX(V,7.2,6.4,28.3,-19.2);
             taumCaT = @(V) tauX(V,21.7,21.3,68.1,-20.5);
-            taumEAG = @(V) tauX(V,-0.67,-26500,283,46.03);
+            taumEAG = @(V) tauX(V,5497,5500,251.5,-51.5);
+            % let's just use a simpler tau for now
+            % taumEAG = taumK;
 
             % tau_h
             tauhNa = @(V) (0.67/(1+exp((V+62.9)/-10.0)))*(1.5 + 1/(1+exp((V+34.9)/3.6)));
@@ -188,15 +292,15 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
             % set some initial conditions 
             V1(1) = self.E_leak;
             V2(1) = self.E_leak;
-            Ca2(1) = 0.05;
+            Ca2(1) = self.parameters.Ca_in;
 
             dt = self.dt;
             R_by_zF = 500.0*(8.6174e-005);
             T = 10 + 273.15;
             RT_by_zF = R_by_zF*T;
-            f = 14.96;
-            fA = f*A2;
-            exp_dt_by_tau_Ca = exp(-dt/tau_Ca);
+            f = P.f;
+            fA = f*P.A2;
+            exp_dt_by_tau_Ca = exp(-dt/P.tau_Ca);
 
             for i = 2:nsteps
 
@@ -207,7 +311,7 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
                 minf_Na = mNainf(V1(i-1));
                 hinf_Na = hNainf(V1(i-1));
                 minf_K  = mKinf(V1(i-1));
-                minf_EAG = mEAGinf(V1(i-1),0.05);
+                minf_EAG = mEAGinf(V1(i-1),self.parameters.Ca_in);
 
                 % integrate Na channel
                 mNa1 = minf_Na + (mNa1 - minf_Na)*exp(-dt/taumNa(V1(i-1)));
@@ -218,22 +322,22 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
                 mEAG1 = minf_EAG + (mEAG1 - minf_EAG)*exp(-dt/taumEAG(V1(i-1)));
                 
                 % compute effective conductances 
-                gNa1(i) = g_Na1*(mNa1^3)*hNa1; 
-                gK1(i) = g_K1*(mK1^4);
-                gEAG1(i) = g_EAG1*(mEAG1); %% How do we know this exponent?
+                gNa1(i) = P.gNa1*(mNa1^3)*hNa1; 
+                gK1(i) = P.gK1*(mK1^4);
+                gEAG1(i) = P.gEAG1*(mEAG1^2); 
 
-                sigma_g1 = gNa1(i) + gK1(i) + gEAG1(i) + g_leak; 
+                sigma_g1 = gNa1(i) + gK1(i) + gEAG1(i) + P.gLeak; 
 
                 % compute currents from electric coupling 
                 if ~isnan(V2(i-1))
-                    I1(i) = (g_1*(V_ext - V1(i-1)) + g_1_2*(V2(i-1) - V1(i-1)))*1e-6; % in nA
+                    I1(i) = (P.g1*(V_ext - V1(i-1)) + P.g12*(V2(i-1) - V1(i-1)))*1e-6; % in nA
                 else
-                    I1(i) = (g_1*(V_ext - V1(i-1)))*1e-6;
+                    I1(i) = (P.g1*(V_ext - V1(i-1)))*1e-6;
                 end
 
-                V_inf1 = (gNa1(i)*self.E_Na + gK1(i)*self.E_K + gEAG1(i)*self.E_K + g_leak*self.E_leak + I1(i)/A1)/sigma_g1;
+                V_inf1 = (gNa1(i)*self.E_Na + gK1(i)*self.E_K + gEAG1(i)*self.E_K + P.gLeak*self.E_leak + I1(i)/P.A1)/sigma_g1;
 
-                tau_v1 = C_m/(sigma_g1*10); % unit correction
+                tau_v1 = P.C_m/(sigma_g1); % unit correction
 
                 V1(i) = V_inf1 + (V1(i-1) - V_inf1)*exp(-dt/tau_v1);
 
@@ -241,7 +345,7 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
                 % compartment 2  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
                 % compute Calcium reversal potential
-                E_Ca(i) = RT_by_zF*log(Ca_o/Ca2(i-1)); 
+                E_Ca(i) = RT_by_zF*log(P.Ca_out/Ca2(i-1)); 
 
                 minf_Na = mNainf(V2(i-1));
                 hinf_Na = hNainf(V2(i-1));
@@ -263,263 +367,170 @@ classdef synapticTerminal < handle & matlab.mixin.CustomDisplay
                 hCaT2 = hinf_Na + (hCaT2 - hinf_Na)*exp(-dt/tauhCaT(V2(i-1)));
                 
                 % compute effective conductances 
-                gNa2(i) = g_Na2*(mNa2^3)*hNa2; 
-                gK2(i) = g_K2*(mK2^4);
-                gEAG2(i) = g_EAG2*(mEAG2); %% How do we know this exponent?
-                gCa2(i) = g_Ca*(mCaT2^3)*hCaT2; 
+                gNa2(i) = P.gNa2*(mNa2^3)*hNa2; 
+                gK2(i) = P.gK2*(mK2^4);
+                gEAG2(i) = P.gEAG2*(mEAG2^2); % assuming p =2
+                gCa2(i) = P.gCa2*(mCaT2^3)*hCaT2; 
 
-                sigma_g2 = gNa2(i) + gK2(i) + gEAG2(i) + gCa2(i) + g_leak; 
+                sigma_g2 = gNa2(i) + gK2(i) + gEAG2(i) + gCa2(i) + P.gLeak; 
 
                 % compute currents from electric coupling 
-                I2(i) = (g_2*(V_ext - V2(i-1)) + g_1_2*(V1(i-1) - V2(i-1)))*1e-6; % in nA
+                I2(i) = (P.g2*(V_ext - V2(i-1)) + P.g12*(V1(i-1) - V2(i-1)))*1e-6; % in nA
 
-                V_inf2 = (gNa2(i)*self.E_Na + gK2(i)*self.E_K + gCa2(i)*E_Ca(i) + gEAG2(i)*self.E_K + g_leak*self.E_leak +  I2(i)/A2)/sigma_g2;
-                tau_v2 = C_m/(sigma_g2*10); % unit correction
+                V_inf2 = (gNa2(i)*self.E_Na + gK2(i)*self.E_K + gCa2(i)*E_Ca(i) + gEAG2(i)*self.E_K + P.gLeak*self.E_leak +  I2(i)/P.A2)/sigma_g2;
+                tau_v2 = P.C_m/(sigma_g2); % unit correction
 
                 V2(i) = V_inf2 + (V2(i-1) - V_inf2)*exp(-dt/tau_v2);
 
 
                 % update Calcium 
                 ca_current = gCa2(i)*(V2(i-1) - E_Ca(i));
-                cinf = Ca_i - fA*ca_current; 
+                cinf = P.Ca_in - fA*ca_current; 
                 Ca2(i) = cinf + (Ca2(i-1) - cinf)*exp_dt_by_tau_Ca; 
 
             end
 
 
-            currents.gNa1 = gNa1.*(V1 - self.E_Na).*A2;
-            currents.gK1 = gK1.*(V1 - self.E_K).*A2;
-            currents.gEAG1 = gEAG1.*(V1 - self.E_K).*A2;
-            currents.gNa2 = gNa2.*(V2 - self.E_Na).*A2;
-            currents.gK2 = gK2.*(V2 - self.E_K).*A2;
-            currents.gEAG2 = gEAG2.*(V2 - self.E_K).*A2;
-            currents.gCa2 = gCa2.*(V2 - E_Ca).*A2;
+            currents.gNa1 = gNa1.*(V1 - self.E_Na).*P.A2;
+            currents.gK1 = gK1.*(V1 - self.E_K).*P.A2;
+            currents.gEAG1 = gEAG1.*(V1 - self.E_K).*P.A2;
+            currents.gNa2 = gNa2.*(V2 - self.E_Na).*P.A2;
+            currents.gK2 = gK2.*(V2 - self.E_K).*P.A2;
+            currents.gEAG2 = gEAG2.*(V2 - self.E_K).*P.A2;
+            currents.gCa2 = gCa2.*(V2 - E_Ca).*P.A2;
+
+
+            % also convert the conductances back into gating variables so we can examine what the channels are actually doing 
+            gating_variables.EAG1 = (gEAG1./self.parameters.gEAG1).^(1/2);
+            gating_variables.EAG2 = (gEAG2./self.parameters.gEAG2).^(1/2);
+            gating_variables.K1 = (gK1./self.parameters.gK1).^(1/4);
+            gating_variables.K2 = (gK2./self.parameters.gK2).^(1/4);
 
             currents.I1 = I1;
             currents.I2 = I2;
 
         end
 
-
-
-        function N = integrate_SGS_JULIA(self)
-
-            % assemble things to pass into Julia
-            parameters = self.parameters(:);
-            reversal_potentials  = [self.E_Na; self.E_K; self.E_leak];
-            initial_conditions = self.initial_conditions(:);
-            time_params = [self.dt; self.t_end];
-            S = self.V_drive(:); 
-
-
-            % run using Julia
-            N = jl.call('intSynTerm',parameters,reversal_potentials, initial_conditions, time_params',S);
-
-
-            % update initial conditions 
-            %self.initial_conditions = N(end,:);
-        
-
-        end % end integrate Julia code
-
-
-    
-
-        function quitManipulateCallback(self,~,~)
-            % destroy every object in self.handles
-            d = fieldnames(self.handles);
-            for i = 1:length(d)
-                try
-                    delete(self.handles.(d{i}))
-                    self.handles = rmfield(self.handles,d{i});
-                catch
-                end
-            end
-
-        end % end quitManipulateCallback 
-
-
-        function checkBounds(self)
-            assert(~any(self.lb >= self.ub),'At least one lower bound is greater than a upper bound');
-            assert(all(self.parameters <= self.ub) && all(self.parameters >= self.lb),'At least one parameter out of bounds');
-            max_conductances = self.parameters(~cellfun(@isempty,cellfun(@(x) strfind(x,'g_'),self.parameter_names,'UniformOutput',false)));
-            assert(min(max_conductances) >= 0,'Conductances cannot be < 0');
-        end
-
         function manipulate(self)
-            % check if a manipulate control window is already open. otherwise, create it
-            make_gui = true;
-            if isfield(self.handles,'manipulate_control')
-                if isvalid(self.handles.manipulate_control)
-                    make_gui = false;
-                end
+            % create a window to show the voltage traces 
+            self.handles.time_series_fig = figure('position',[100 250 1701 1100],'NumberTitle','off','IntegerHandle','off','Name',['manipulate[synapticTerminal]']);
+            for i = 1:6
+                self.handles.ax(i) = subplot(3,2,i); hold on
+                xlabel(self.handles.ax(i),'Time (ms)')
             end
 
-            if make_gui
-                Height = 1100;
-                self.handles.manipulate_control = figure('position',[1000 250 1400 Height],'NumberTitle','off','IntegerHandle','off','CloseRequestFcn',@self.quitManipulateCallback,'Name',['manipulate[neuron]']);
+            ylabel(self.handles.ax(1),'V (mV)')
+            ylabel(self.handles.ax(2),'Ca (\mu M)')
+            ylabel(self.handles.ax(3),'I (nA)')
+            ylabel(self.handles.ax(4),'I (nA)')
+            title(self.handles.ax(4),'Currents in Calcium microdomain')
+            title(self.handles.ax(3),'Currents in Compartment #1')
 
-                % add 4 axes
-                dummy = NaN*(self.dt:self.dt:self.t_end);
-                for i = 1:4
-                    self.handles.ax(i) = axes;
-                    self.handles.plot_handles(i) = plot(dummy,dummy,'k');
-                    self.handles.ax(i).XLim = [0 self.t_end];
-                end 
-                self.handles.ax(1).Position = [.05 .55 .3 .4];
-                self.handles.ax(2).Position = [.4 .55 .3 .4];
-                self.handles.ax(3).Position = [.05 .05 .3 .4];
-                self.handles.ax(4).Position = [.4 .05 .3 .4];
-  
-                % fix the Y-lim for all the voltage axes
-                self.handles.ax(1).YLim = [-70 70];
-                self.handles.ax(2).YLim = [-70 70];
-                self.handles.ax(3).YLim = [-70 70];
+            ylabel(self.handles.ax(5),'Gating variable')
+            ylabel(self.handles.ax(6),'Gating variable')
 
-                % plot the V_drive onto the first axes
-                for i = 1:4
-                    self.handles.plot_handles(i).XData = self.dt:self.dt:self.t_end;
-                end
-                self.handles.plot_handles(1).YData = (self.V_drive);
+            linkaxes(self.handles.ax,'x')
+            linkaxes(self.handles.ax(3:4),'y')
+
+            set(self.handles.ax(1),'XLim',[0 self.t_end])
+            set(self.handles.ax(1),'YLim',[-80 80])
+            
+
+            % spawn a puppeteer object
+            pp = puppeteer(self.parameters,self.lb,self.ub,self.units);
+
+            % configure 
+            attachFigure(pp,self.handles.time_series_fig)
+            pp.callback_function = @self.updatePlots;
+
+            dt =self.dt;
+            t_end = self.t_end;
+
+            % create vectors to store simulations
+            T = (dt:dt:t_end);
+            V = NaN*(dt:dt:t_end);
+            C = NaN*(dt:dt:t_end);
+
+            self.handles.V_trace(1) = plot(self.handles.ax(1),T,V,'k','LineWidth',2);
+            self.handles.V_trace(2) = plot(self.handles.ax(1),T,V,'r','LineWidth',2);
+            self.handles.V_trace(3) = plot(self.handles.ax(1),T,V,'b','LineWidth',2);
+            legend(self.handles.V_trace,{'Incoming AP','V far from VGCC','V close to VGCC'})
+
+            self.handles.C_trace = plot(self.handles.ax(2),T,V,'b','LineWidth',2);
+            % also plot the internal and external calcium concentrations in dotted lines 
+            self.handles.Ca_out = plot(self.handles.ax(2),T,T*0 + self.parameters.Ca_out,'k:');
+            self.handles.Ca_in = plot(self.handles.ax(2),T,T*0 + self.parameters.Ca_in,'k:');
+            set(self.handles.ax(2),'YLim',[self.parameters.Ca_in/2 self.parameters.Ca_out*2],'YScale','log')
 
 
-                % draw for the first time
-                f = self.parameter_names;
-                pvec = self.parameters;
+            % currents
+            self.handles.Itrace(1) = plot(self.handles.ax(3),T,V,'LineWidth',2);
+            self.handles.Itrace(2) = plot(self.handles.ax(3),T,V,'LineWidth',2);
+            self.handles.Itrace(3) = plot(self.handles.ax(3),T,V,'LineWidth',2);
+            self.handles.Itrace(4) = plot(self.handles.ax(4),T,V,'LineWidth',2);
+            self.handles.Itrace(5) = plot(self.handles.ax(4),T,V,'LineWidth',2);
+            self.handles.Itrace(6) = plot(self.handles.ax(4),T,V,'LineWidth',2);
+            self.handles.Itrace(7) = plot(self.handles.ax(4),T,V,'LineWidth',2);
 
-                % make sure the bounds are OK
-                checkBounds(self);
+            legend(self.handles.Itrace(1:3),{'gNa','gK','gEAG'})
+            legend(self.handles.Itrace(4:7),{'gNa','gK','gEAG','gCa'})
+
+            % gating variables
+            self.handles.m1(1) = plot(self.handles.ax(5),T,V,'LineWidth',2);
+            self.handles.m1(2) = plot(self.handles.ax(5),T,V,'LineWidth',2);
+            legend(self.handles.m1,{'m_{K}','m_{EAG}'})
+
+            self.handles.m2(1) = plot(self.handles.ax(6),T,V,'LineWidth',2);
+            self.handles.m2(2) = plot(self.handles.ax(6),T,V,'LineWidth',2);
+            legend(self.handles.m2,{'m_{K}','m_{EAG}'})
+
+            figure(self.handles.time_series_fig)
+            prettyFig();
         
-                Height = 1010;
-                nspacing = 50;
-                x_offset = self.t_end*2.5;
-                for i = 1:length(f)
-                    self.handles.control(i) = uicontrol(self.handles.manipulate_control,'Position',[1070 Height-i*nspacing 230 20],'Style', 'slider','FontSize',12,'Callback',@self.sliderCallback,'Min',self.lb(i),'Max',self.ub(i),'Value',pvec(i));
-       
-                    try    % R2013b and older
-                       addlistener(self.handles.control(i),'ActionEvent',@self.sliderCallback);
-                    catch  % R2014a and newer
-                       addlistener(self.handles.control(i),'ContinuousValueChange',@self.sliderCallback);
-                    end
 
-                    % hat tip: http://undocumentedmatlab.com/blog/continuous-slider-callback
-                    thisstring = [f{i} '= ',mat2str(self.parameters(i))];
-                    self.handles.controllabel(i) = text(self.handles.ax(1),1,1,thisstring,'FontSize',20);
-                    self.handles.lbcontrol(i) = uicontrol(self.handles.manipulate_control,'Position',[1305 Height-i*nspacing+3 40 20],'style','edit','String',mat2str(self.lb(i)),'Callback',@self.resetSliderBounds);
-                    self.handles.ubcontrol(i) = uicontrol(self.handles.manipulate_control,'Position',[1350 Height-i*nspacing+3 40 20],'style','edit','String',mat2str(self.ub(i)),'Callback',@self.resetSliderBounds);
+            self.handles.V_trace(1).YData = self.V_drive;
 
-
-                end
-                for i = 1:length(f)
-                    self.handles.controllabel(i).Position = [x_offset 55-(i-1)*16];
-                end
-
-                % make a second figure for the currents 
-                self.handles.manipulate_control2 = figure('position',[1000 250 1400 500],'NumberTitle','off','IntegerHandle','off','CloseRequestFcn',@self.quitManipulateCallback,'Name','Effective Conductances ');
-
-                t1 = subplot(2,1,1); hold on
-                self.handles.current_plot1(1) = plot(NaN,NaN,'LineWidth',3);
-                self.handles.current_plot1(2) = plot(NaN,NaN,'LineWidth',3);
-                self.handles.current_plot1(3) = plot(NaN,NaN,'LineWidth',3);
-                self.handles.current_plot1(4) = plot(NaN,NaN,'LineWidth',3);
-                L = {'NaV','K','EAG','Ca'};
-                legend(self.handles.current_plot1,L,'Location','northwest')
-
-                t2 = subplot(2,1,2); hold on
-                self.handles.current_plot2(1) = plot(NaN,NaN,'LineWidth',3);
-                self.handles.current_plot2(2) = plot(NaN,NaN,'LineWidth',3);
-                self.handles.current_plot2(3) = plot(NaN,NaN,'LineWidth',3);
-                self.handles.current_plot2(4) = plot(NaN,NaN,'LineWidth',3);
-
-                linkaxes([t1 t2],'x')
-                time = self.dt:self.dt:self.t_end;
-                try
-                    set(t1,'XLim',time([find(self.V_drive > 0,1,'first') - 50 find(self.V_drive > 0,1,'last') + 200]))
-                catch
-                end
-
-                for i = 1:4
-                    self.handles.current_plot1(i).XData = self.dt:self.dt:self.t_end;
-                    self.handles.current_plot2(i).XData = self.dt:self.dt:self.t_end;
-                end
-   
-
-                % non stop integration
-                while isfield(self.handles,'ax')
-                    if isvalid(self.handles.ax)
-                        [V1, V2, Ca, currents] = self.integrate;
-                        self.handles.plot_handles(2).YData = V1;
-                        self.handles.plot_handles(3).YData = V2;
-                        self.handles.plot_handles(4).YData = Ca;
-
-                        % also show the currents 
-                        self.handles.current_plot1(1).YData = currents.gNa1;
-                        self.handles.current_plot1(2).YData = currents.gK1;
-                        self.handles.current_plot1(3).YData = currents.gEAG1;
-
-                        self.handles.current_plot2(1).YData = currents.gNa2;
-                        self.handles.current_plot2(2).YData = currents.gK2;
-                        self.handles.current_plot2(3).YData = currents.gEAG2;
-                        self.handles.current_plot2(4).YData = currents.gCa2;
-
-                        drawnow limitrate
-         
-                    end
-                end
-
-
-            end % end if make-gui
+ 
         end % end manipulate 
 
+        function updatePlots(self,parameters)
 
+            self.parameters = parameters;
 
-        function sliderCallback(self,src,~)
-            % evaluate
-            this_param = find(self.handles.control == src);
-            f = self.parameter_names;
+            self.handles.Ca_in.YData = self.handles.Ca_in.YData*0 + self.parameters.Ca_in;
+            self.handles.Ca_out.YData = self.handles.Ca_out.YData*0 + self.parameters.Ca_out;
 
-            self.parameters(this_param) = src.Value;
-            thisstring = [f{this_param} '= ',mat2str(src.Value)];
+            [V1,V2,Ca2,currents,gv] = self.integrate;
 
-            % update the values shown in text
-            self.handles.controllabel(this_param).String = thisstring;
+            try
+                self.handles.m1(1).YData = gv.K1;
+                self.handles.m1(2).YData = gv.EAG1;
 
-        end % end sliderCallback
+                self.handles.m2(1).YData = gv.K2;
+                self.handles.m2(2).YData = gv.EAG2;
 
-        function resetSliderBounds(self,src,~)
-            checkStringNum(self,src.String);
-            if any(self.handles.lbcontrol == src)
-                % some lower bound being changed
-                this_param = find(self.handles.lbcontrol == src);
-                new_bound = str2double(src.String);
-                self.lb(this_param) = new_bound;
+                self.handles.V_trace(2).YData = V1;
+                self.handles.V_trace(3).YData = V2;
+                self.handles.C_trace.YData = Ca2;
                 
-                if self.handles.control(this_param).Value < new_bound
-                    self.handles.control(this_param).Value = new_bound;
-                    self.parameters.(self.parameter_names{this_param}) = new_bound;
-                end
-                checkBounds(self);
-                self.handles.control(this_param).Min = new_bound;
-            elseif any(self.handles.ubcontrol == src)
-                % some upper bound being changed
-                this_param = find(self.handles.ubcontrol == src);
-                new_bound = str2double(src.String);
-                self.ub(this_param) = new_bound;
-                
-                if self.handles.control(this_param).Value > new_bound
-                    self.handles.control(this_param).Value = new_bound;
-                    self.parameters.(self.parameter_names{this_param}) = new_bound;
-                end
-                checkBounds(self);
-                self.handles.control(this_param).Max = new_bound;
-            else
-                error('error 142')
+                self.handles.Itrace(1).YData = currents.gNa1;
+                self.handles.Itrace(2).YData = currents.gK1;
+                self.handles.Itrace(3).YData = currents.gEAG1;
+
+                self.handles.Itrace(4).YData = currents.gNa2;
+                self.handles.Itrace(5).YData = currents.gK2;
+                self.handles.Itrace(6).YData = currents.gEAG2;
+                self.handles.Itrace(7).YData = currents.gCa2;
+
+                set(self.handles.ax(2),'YLim',[self.parameters.Ca_in/2 self.parameters.Ca_out*2],'YScale','log')
+
+                Y = max(max(abs(struct2mat(currents))));
+                self.handles.ax(3).YLim = [-Y Y];
+            catch
+                warning('Bad integraton')
             end
-        end % end resetSliderBounds
+        end
 
-        function checkStringNum(self,value)
-            assert(~isnan(str2double(value)),'Enter a real number')
-        end % end checkStringNum
 
     end % end methods 
 

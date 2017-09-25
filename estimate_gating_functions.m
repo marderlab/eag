@@ -367,11 +367,6 @@ for i = 1:size(MutFile,1)
 	end
 end
 
-% % remove baseline from every current trace
-% for i = 1:size(all_I,2)
-% 	all_I(:,i) = all_I(:,i) - mean(all_I(1:50,i));
-% end
-
 
 % compute asymptotic currents for all traces
 I_inf = mean(all_I(4e3:5e3,:));
@@ -860,6 +855,9 @@ if being_published
 	delete(gcf)
 end
 
+% save this for later use
+save('EAG_activation_functions.mat','mInfMutEAG','mInfEAG');
+
 
 %% Timescale dependence on voltage
 % In this section, I look at how the timescale of activation of the EAG current depends on the voltage. First, I construct time series of EAG conductances by subtracted cell-averaged currents in HEK cells without EAG from cell-averaged currents in HEK cells with EAG, and then converting those corrects into conductances. These conductances are shown below: (a) shows these conductances for WT EAG channels, and (b) shows the same conductances for mutant EAG channels. Colors indicate holding voltage (blue = more hyperpolarized). Note that these raw curves look quite similar. 
@@ -998,6 +996,8 @@ for i = 1:4
 	ff = fit(x(:),y(:),tauX,'StartPoint',[7 6 30 -20]);
 	plot(V_space,ff(V_space),'k--')
 
+	tauEAG = ff;
+
 	y = tau_mut(:,i);
 	x = V_space;
 	x(tau_r2_mut(:,i) < r2_cutoff) = [];
@@ -1019,6 +1019,11 @@ for i = 1:4
 		l(1) = plot(NaN,NaN,'k');
 		l(2) = plot(NaN,NaN,'r');
 		legend(l,{'WT EAG','Mut EAG'},'location','northeast')
+	end
+
+	% save these for later use
+	if i == 2
+		save('EAG_activation_functions.mat','tauEAG','-append');
 	end
 end
 
@@ -1187,6 +1192,9 @@ ff = fit(all_x(:),all_y(:),f,'StartPoint',[1 .1],'Lower',[0 0],'Upper',[1 0]);
 temp = logspace(log10(min(Ca_space)),log10(max(Ca_space)),1e3);
 plot(temp,ff(temp),'k')
 
+Ca_dep = ff;
+save('EAG_activation_functions.mat','Ca_dep','-append');
+
 subplot(1,3,3); hold on
 plot(temp,ff(temp),'k')
 
@@ -1215,6 +1223,9 @@ ff = fit(all_x(:),all_y(:),f,'StartPoint',[1 .1],'Lower',[0 min(all_y)]);
 temp = logspace(log10(min(Ca_space)),log10(max(Ca_space)),1e3);
 plot(temp,ff(temp),'r')
 
+Ca_dep_mut = ff;
+save('EAG_activation_functions.mat','Ca_dep_mut','-append');
+
 t =  ['$\frac{' oval((ff.A)*1e6) '\mu M}{[Ca^{2+}]+ ' oval((ff.A)*1e6) ' \mu M}+ ' oval(ff.B) '$'];
 h = text(1e-7,1.1,t,'interpreter','latex','FontSize',24,'Color','r');
 
@@ -1229,6 +1240,7 @@ if being_published
 	snapnow
 	delete(gcf)
 end
+
 
 
 
