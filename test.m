@@ -33,6 +33,7 @@ x.addSynapse('Elec','C1','C3',.05); % one-way electrical syanpse from 1->3
 x.addSynapse('Elec','C2','C3',.05); 
 x.addSynapse('Elec','C3','C2',.05); 
 
+x.transpile;
 x.compile;
 
 x.manipulate;
