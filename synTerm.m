@@ -10,7 +10,7 @@ classdef synTerm < handle
 	properties 
 		handles
 		parameters
-            units
+        units
 		lb
 		ub
 		dt = 50e-3;
@@ -26,15 +26,24 @@ classdef synTerm < handle
         E_K = -106;
         E_leak = -70;
 
+        use_cache = true
+
 	end % end props
 
     methods 
 
-        function self = synTerm(make_fig)
+        function self = synTerm(make_fig,use_cache)
 
             if nargin < 1
                 make_fig = true;
             end
+
+            if nargin < 2
+                self.use_cache = true;
+            else
+                self.use_cache = use_cache;
+            end
+
 
             p.Ca_in = 23e-3;
             lb.Ca_in = 23e-3;
@@ -101,22 +110,24 @@ classdef synTerm < handle
             ub.g12 = 10;
             units.g12 = 'uS';
 
-            % check if there is something in the cache
-            temp = cache('syn_term_params');
-            if ~isempty(temp)
-              disp('Reading cached values...')
-              % replace parameters with cached parameters
-              p = temp;
-              % pick some reasonable lower and upper bounds
-              f = fieldnames(temp);
-              for i = 1:length(f)
-                  if  lb.(f{i}) > temp.(f{i})
-                      lb.(f{i}) = temp.(f{i});
+            if self.use_cache
+                % check if there is something in the cache
+                temp = cache('syn_term_params');
+                if ~isempty(temp)
+                  disp('Reading cached values...')
+                  % replace parameters with cached parameters
+                  p = temp;
+                  % pick some reasonable lower and upper bounds
+                  f = fieldnames(temp);
+                  for i = 1:length(f)
+                      if  lb.(f{i}) > temp.(f{i})
+                          lb.(f{i}) = temp.(f{i});
+                      end
+                      if  ub.(f{i}) < temp.(f{i})
+                          ub.(f{i}) = temp.(f{i});
+                      end
                   end
-                  if  ub.(f{i}) < temp.(f{i})
-                      ub.(f{i}) = temp.(f{i});
-                  end
-              end
+                end
             end
 
             self.parameters = p;

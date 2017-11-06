@@ -1,6 +1,6 @@
 % makes fig 
 
-s = synTerm(false);
+s = synTerm(false,false);
 [x,x2] =  makeEAGXolotl(s);
 
 [V_wt,Ca_wt] = x.integrate;
