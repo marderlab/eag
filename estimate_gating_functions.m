@@ -812,6 +812,11 @@ for i = 1:length(Ca_space)
 	g_inf_mut(:,i) = temp;
 end
 
+% because we're missing data from one column
+% of g_inf_0, we're going to average the rest and use
+% that 
+g_inf_0(:,4) = nanmean(g_inf_0,2);
+
 g_inf_wt = g_inf_wt - g_inf_0;
 g_inf_mut = g_inf_mut - g_inf_0;
 
@@ -862,22 +867,22 @@ figure('outerposition',[0 0 1000 500],'PaperUnits','points','PaperSize',[1000 50
 subplot(1,2,1); hold on
 c = parula(34);
 for i = 1:3:length(V_space)
-	x = Ca_space([1:3 5]);
-	y = g_inf_wt(i,[1:3 5]);
+	x = Ca_space(:);
+	y = g_inf_wt(i,:);
 	plot(x,y,'-+','Color',c(i,:))
 end
-set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]))
+set(gca,'XScale','log','XTick',Ca_space,'XTickLabel',L(:))
 xlabel('[Ca^2^+] (M)')
 ylabel('Conductance')
 title('WT EAG')
 
 subplot(1,2,2); hold on
 for i = 1:3:length(V_space)
-	x = Ca_space([1:3 5]);
-	y = g_inf_mut(i,[1:3 5]);
+	x = Ca_space(:);
+	y = g_inf_mut(i,:);
 	plot(x,y,'-+','Color',c(i,:))
 end
-set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]))
+set(gca,'XScale','log','XTick',Ca_space,'XTickLabel',L(:))
 xlabel('[Ca^2^+] (M)')
 ylabel('Conductance')
 title('Mut EAG')
@@ -903,8 +908,8 @@ c = parula(length(V_space)+1);
 
 all_x = []; all_y = [];
 for i = 33
-	x = Ca_space([1:3 5]);
-	y = g_inf_wt(i,[1:3 5]);
+	x = Ca_space;
+	y = g_inf_wt(i,:);
 	y = y/M;
 	y = y.^2; % assuming p = 2
 	plot(x,y,'k+')
@@ -912,10 +917,11 @@ for i = 33
 	all_y = [all_y(:); y(:)];
 end
 
-set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]),'YLim',[0 1.5])
+set(gca,'XScale','log','XTick',Ca_space,'XTickLabel',L,'YLim',[0 1.5])
 xlabel('[Ca^2^+] (M)')
 ylabel('m_{Inf}')
 title('WT EAG')
+set(gca,'XTickLabelRotation',45)
 
 ff = fit(all_x(:),all_y(:),f,'StartPoint',[1 .1],'Lower',[0 0],'Upper',[1 0]);
 temp = logspace(log10(min(Ca_space)),log10(max(Ca_space)),1e3);
@@ -933,9 +939,9 @@ h = text(1e-7,1.1,t,'interpreter','latex','FontSize',24,'Color','r');
 
 subplot(1,3,2); hold on
 all_x = []; all_y = [];
-for i = 33:1:length(V_space)
-	x = Ca_space([1:3 5]);
-	y = g_inf_mut(i,[1:3 5]);
+for i = 33
+	x = Ca_space;
+	y = g_inf_mut(i,:);
 	y = y/M;
 	y = y.^2; % assuming p = 2
 	plot(x,y,'r+')
@@ -943,9 +949,10 @@ for i = 33:1:length(V_space)
 	all_y = [all_y(:); y(:)];
 end
 
-set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]),'YLim',[0 1.5]')
+set(gca,'XScale','log','XTick',Ca_space,'XTickLabel',L,'YLim',[0 1.5]')
 xlabel('[Ca^2^+] (M)')
 ylabel('m_{Inf}')
+set(gca,'XTickLabelRotation',45)
 title('Mut EAG')
 
 ff = fit(all_x(:),all_y(:),f,'StartPoint',[1 .1],'Lower',[0 min(all_y)]);
@@ -961,7 +968,8 @@ h = text(1e-7,1.1,t,'interpreter','latex','FontSize',24,'Color','r');
 subplot(1,3,3); hold on
 plot(temp,ff(temp),'r')
 legend({'WT','Mutated'})
-set(gca,'XScale','log','XTick',Ca_space(([1:3 5])),'XTickLabel',L([1:3 5]),'YLim',[0 1.5]')
+set(gca,'XScale','log','XTick',Ca_space,'XTickLabel',L,'YLim',[0 1.5]')
+set(gca,'XTickLabelRotation',45)
 
 prettyFig();
 
