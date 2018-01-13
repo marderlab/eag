@@ -71,12 +71,12 @@ x.Term.EAGes.gbar = 0;
 V = x.integrate;
 plot(T-700,V(:,2),'Color',c(3,:))
 
-% extra-sensitive
-x.Term.EAGmut.gbar = 0;
-x.Term.EAGwt.gbar = 0;
-x.Term.EAGes.gbar = eag_gbar;
-V = x.integrate;
-plot(T-700,V(:,2),'Color',c(4,:))
+% % extra-sensitive
+% x.Term.EAGmut.gbar = 0;
+% x.Term.EAGwt.gbar = 0;
+% x.Term.EAGes.gbar = eag_gbar;
+% V = x.integrate;
+% plot(T-700,V(:,2),'Color',c(4,:))
 
 set(gca,'XLim',[-10 100])
 legend({'EAG null','EAG wt','EAG mutant','EAG high sensitive'})
@@ -160,7 +160,7 @@ for i = 1:length(all_Ca)
 end
 
 subplot(2,2,2); hold on
-for i = 1:3
+for i = 1:2
 	plot(all_Ca,all_ap_width(:,i),'o','Color',c(i+1,:))
 end
 legend({'EAG wt','EAG mutant','EAG hi sensitive'})
