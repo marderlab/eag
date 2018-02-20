@@ -26,7 +26,6 @@ x.addConductance('Term','aldrich/DmNaV',500,s.E_Na);
 x.addConductance('Term','Shaker',60,s.E_K);
 x.addConductance('Term','EAGwt',eag_gbar,s.E_K);
 x.addConductance('Term','EAGmut',eag_gbar,s.E_K);
-x.addConductance('Term','EAGes',0,s.E_K);
 x.addConductance('Term','hara/Cac',p.gCa2,20);
 x.addConductance('Term','Leak',p.gLeak,s.E_leak)
 
@@ -51,7 +50,6 @@ c = [0 0 0; lines(3)];
 % null
 x.Term.EAGwt.gbar = 0;
 x.Term.EAGmut.gbar = 0;
-x.Term.EAGes.gbar = 0;
 V = x.integrate;
 plot(T-700,V(:,2),'k')
 ylabel('V_m (mV)')
@@ -60,14 +58,12 @@ xlabel('Time (ms)')
 % WT
 x.Term.EAGwt.gbar = eag_gbar;
 x.Term.EAGmut.gbar = 0;
-x.Term.EAGes.gbar = 0;
 V = x.integrate;
 plot(T-700,V(:,2),'Color',c(2,:))
 
 % mutant
 x.Term.EAGmut.gbar = eag_gbar;
 x.Term.EAGwt.gbar = 0;
-x.Term.EAGes.gbar = 0;
 V = x.integrate;
 plot(T-700,V(:,2),'Color',c(3,:))
 
@@ -96,7 +92,6 @@ for i = 1:length(all_Ca)
 	% WT
 	x.Term.EAGwt.gbar = eag_gbar;
 	x.Term.EAGmut.gbar = 0;
-	x.Term.EAGes.gbar = 0;
 	
 	V = x.integrate; V = V(:,2);
 
@@ -117,7 +112,6 @@ for i = 1:length(all_Ca)
 	% mutant
 	x.Term.EAGwt.gbar = 0;
 	x.Term.EAGmut.gbar = eag_gbar;
-	x.Term.EAGes.gbar = 0;
 	V = x.integrate; V = V(:,2);
 
 	[m,idx] = max(V);
@@ -134,25 +128,25 @@ for i = 1:length(all_Ca)
 		all_ap_width(i,2) = (z-a)*x.dt;
 	end
 
-	% extra-sensitive
-	x.Term.EAGwt.gbar = 0;
-	x.Term.EAGmut.gbar = 0;
-	x.Term.EAGes.gbar = eag_gbar;
-	V = x.integrate; V = V(:,2);
+	% % extra-sensitive
+	% x.Term.EAGwt.gbar = 0;
+	% x.Term.EAGmut.gbar = 0;
+	% x.Term.EAGes.gbar = eag_gbar;
+	% V = x.integrate; V = V(:,2);
 
-	[m,idx] = max(V);
-	if m > 0
-		all_time_to_peak(i,3) = idx*x.dt - 700;
-	end
+	% [m,idx] = max(V);
+	% if m > 0
+	% 	all_time_to_peak(i,3) = idx*x.dt - 700;
+	% end
 
-	a = find(V>0,1,'first');
-	z = find(V>0,1,'last');
-	if z == length(V)
-		z = Inf;
-	end
-	if ~isempty(z) && ~isempty(a)
-		all_ap_width(i,3) = (z-a)*x.dt;
-	end
+	% a = find(V>0,1,'first');
+	% z = find(V>0,1,'last');
+	% if z == length(V)
+	% 	z = Inf;
+	% end
+	% if ~isempty(z) && ~isempty(a)
+	% 	all_ap_width(i,3) = (z-a)*x.dt;
+	% end
 
 
 
